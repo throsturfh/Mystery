@@ -1,0 +1,161 @@
+:root {
+  color-scheme: dark;
+  --night: #140e0a;
+  --paper: #f3e6c8;
+  --ink: #1b140f;
+  --brass: #d4b36a;
+  --brass-deep: #8a6430;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--night);
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+}
+
+#game {
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--night);
+}
+
+#game canvas {
+  touch-action: none;
+}
+
+#loading {
+  margin: 0;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #f0d59a;
+  font-family: 'Cinzel', Georgia, serif;
+  letter-spacing: 0.04em;
+}
+
+#nameplate {
+  position: fixed;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#nameplate[hidden] {
+  display: none !important;
+}
+
+#nameplate label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+#rotate {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: #140e0a;
+  color: #f3e6c8;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  padding: 32px;
+}
+
+#rotate.show {
+  display: flex;
+}
+
+#rotate p {
+  margin: 0;
+  font-family: 'Cinzel', Georgia, serif;
+  font-size: 28px;
+  letter-spacing: 0.04em;
+  color: #e6c98a;
+}
+
+#rotate span {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 20px;
+  font-style: italic;
+}
+
+#nameplate input {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 16px;
+  line-height: 1.3;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 2px solid var(--brass);
+  background: var(--paper);
+  color: var(--ink);
+  width: 100%;
+  min-height: 44px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+#nameplate input:focus {
+  outline: 2px solid #fff8ea;
+  outline-offset: 1px;
+}
+
+#nameplate button {
+  font-family: 'Cinzel', Georgia, serif;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  background: var(--brass-deep);
+  color: #fff8ea;
+  border: 2px solid var(--brass);
+  border-radius: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+#name-error {
+  margin: 0;
+  min-height: 1.1em;
+  color: #f0b0aa;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+#debug-step {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
