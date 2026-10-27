@@ -35,9 +35,6 @@ jobs:
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v5
-        with:
-          # Creates the Pages site (Actions source) when it does not exist yet.
-          enablement: true
 
       - name: Build
         run: npm run build
