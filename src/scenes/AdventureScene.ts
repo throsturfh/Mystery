@@ -19,9 +19,10 @@ import {
   hintFor,
   onEnter,
   perform,
+  PROP_AT,
   spotsFor,
   useItemOn,
-  WALK,
+  walkFor,
   type Ctx,
   type Spot,
   type Verb,
@@ -81,6 +82,8 @@ export class AdventureScene extends Phaser.Scene {
   private resetArm = false;
   private line: string | null = null;
   private ctx!: Ctx;
+  private scenery: { img: Phaser.GameObjects.Image; show: () => boolean }[] = [];
+  private june?: Phaser.GameObjects.Image;
 
   constructor() {
     super('adventure');
@@ -165,7 +168,7 @@ export class AdventureScene extends Phaser.Scene {
         this.walkResolve = null;
         done?.(true);
       } else {
-        this.bob += dt * 14;
+        this.bob += dt * 8;
         this.place(this.fx + (dx / dist) * step, this.fy + (dy / dist) * step, dx < 0 ? -1 : 1);
       }
     }
@@ -275,7 +278,7 @@ export class AdventureScene extends Phaser.Scene {
     if (dark) {
       const veil = this.add.rectangle(640, 360, 1280, 720, 0x07060a, 0.93).setDepth(150);
       const door = this.add
-        .text(130, 500, 'Door', {
+        .text(100, 300, 'Door', {
           fontFamily: DISPLAY,
           fontSize: '22px',
           color: '#e6c98a',
@@ -295,6 +298,7 @@ export class AdventureScene extends Phaser.Scene {
       }
       this.props.push(g);
     }
+    this.placeScenery();
     this.spots = spotsFor(this.save, room);
     this.syncGhost();
     this.ensureEndingDressing();
@@ -306,7 +310,7 @@ export class AdventureScene extends Phaser.Scene {
     this.plaque.setVisible(show);
     this.lane.setVisible(show);
     if (show && !this.envelope) {
-      this.envelope = this.add.image(790, 448, 'envelope').setDepth(25).setScale(1);
+      this.envelope = this.add.image(1000, 360, 'envelope').setDepth(30).setScale(1);
     }
     if (!show && this.envelope) {
       this.envelope.destroy();
@@ -323,9 +327,9 @@ export class AdventureScene extends Phaser.Scene {
       }
       return;
     }
-    const pos = this.save.room === 'shop' ? { x: 900, y: 590 } : { x: 940, y: 590 };
+    const pos = this.save.room === 'shop' ? { x: 560, y: 590 } : { x: 760, y: 590 };
     if (!this.ghost || !this.ghost.active) {
-      this.ghost = this.add.image(pos.x, pos.y, 'ambrose').setOrigin(0.5, 1).setAlpha(0).setDepth(420).setScale(0.58);
+      this.ghost = this.add.image(pos.x, pos.y, 'ambrose').setOrigin(0.5, 1).setAlpha(0).setDepth(420).setScale(0.62);
       this.tweens.add({ targets: this.ghost, alpha: 0.92, duration: 700 });
     }
     this.ghost.setPosition(pos.x, pos.y).setVisible(true).setDepth(420);
@@ -352,10 +356,53 @@ export class AdventureScene extends Phaser.Scene {
   private killProps(): void {
     for (const prop of this.props) prop.destroy();
     this.props = [];
+    this.scenery = [];
+    this.june = undefined;
+  }
+
+  private addScenery(
+    key: string,
+    x: number,
+    y: number,
+    originX: number,
+    originY: number,
+    depth: number,
+    show: () => boolean,
+    scale = 1,
+  ): void {
+    const img = this.add.image(x, y, key).setOrigin(originX, originY).setDepth(depth).setScale(scale);
+    img.setVisible(show());
+    this.scenery.push({ img, show });
+    this.props.push(img);
+  }
+
+  private placeScenery(): void {
+    const room = this.save.room;
+    const has = (id: 'pencil' | 'matches' | 'book' | 'ledger') => this.save.items.includes(id);
+    const f = this.save.flags;
+    if (room === 'shop') {
+      this.addScenery('prop-pencil', 948, 362, 0.5, 0.5, 12, () => !has('pencil') && f.ledgerWritten !== true, 0.72);
+      this.addScenery('prop-book', PROP_AT.shelfBook.x, PROP_AT.shelfBook.y, 0.5, 0.5, 12, () => f.bookShelved === true, 0.9);
+      this.june = this.add.image(620, 585, 'june').setOrigin(0.5, 1).setScale(0.33).setDepth(500 + 540);
+      this.props.push(this.june);
+    }
+    if (room === 'nook') {
+      this.addScenery('prop-match-cover', 158, 440, 0, 0, 14, () => has('matches') || f.lanternLit === true);
+      this.addScenery('prop-book', PROP_AT.book.x, PROP_AT.book.y, 0, 0, 12, () => !has('book') && f.bookShelved !== true);
+    }
+    if (room === 'stock' && f.lanternLit === true) {
+      this.addScenery('prop-ledger', PROP_AT.ledger.x, PROP_AT.ledger.y, 0, 0, 12, () => !has('ledger') && f.ledgerWritten !== true);
+    }
+  }
+
+  private syncScenery(): void {
+    for (const piece of this.scenery) {
+      if (piece.img.active) piece.img.setVisible(piece.show());
+    }
   }
 
   private place(x: number, y: number, face: 1 | -1): void {
-    const p = closestPoint({ x, y }, WALK);
+    const p = closestPoint({ x, y }, walkFor(this.save.room));
     this.fx = p.x;
     this.fy = p.y;
     this.face = face;
@@ -365,35 +412,47 @@ export class AdventureScene extends Phaser.Scene {
   }
 
   private scaleFor(y: number): number {
-    const t = Phaser.Math.Clamp((y - 508) / (602 - 508), 0, 1);
-    return 0.3 + t * 0.08;
+    const t = Phaser.Math.Clamp((y - 535) / (602 - 535), 0, 1);
+    return 0.32 + t * 0.1;
   }
 
   private drawHero(_dt: number): void {
-    const walkingBob = this.walking ? Math.sin(this.bob) * 7 : Math.sin(this.time.now / 520) * 2;
+    const step = Math.sin(this.bob);
     const sc = this.scaleFor(this.fy);
     let sx = sc;
     let sy = sc;
-    let angle = this.walking ? Math.sin(this.bob) * 4 : 0;
+    let angle = 0;
+    let yoff = Math.sin(this.time.now / 520) * 1.5;
     const posing = this.time.now < this.poseUntil;
     if (!posing) this.pose = 'none';
+    if (this.walking && !posing) {
+      const frame = Math.abs(Math.floor(this.bob)) % 4;
+      const key = `detective-${frame}`;
+      if (this.hero.texture.key !== key) this.hero.setTexture(key);
+      sx *= 1 - step * 0.035;
+      sy *= 1 + step * 0.045;
+      angle = step * 2.2;
+      yoff = -Math.abs(step) * 7;
+    } else if (this.hero.texture.key !== 'detective') {
+      this.hero.setTexture('detective');
+    }
     if (posing && this.pose === 'look') {
-      sy *= 1.07;
-      angle += this.face < 0 ? 7 : -7;
+      sy *= 1.06;
+      angle += this.face < 0 ? 6 : -6;
     }
     if (posing && this.pose === 'pick') {
-      sx *= 1.16;
-      sy *= 0.84;
-      angle += this.face < 0 ? -8 : 8;
+      sx *= 1.12;
+      sy *= 0.88;
+      angle += this.face < 0 ? -7 : 7;
     }
-    this.hero.setPosition(this.fx, this.fy + (this.walking ? -Math.abs(Math.sin(this.bob)) * 4 : walkingBob));
+    this.hero.setPosition(this.fx, this.fy + yoff);
     this.hero.setFlipX(this.face < 0);
     this.hero.setScale(sx, sy);
     this.hero.setAngle(angle);
-    this.hero.setAlpha(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 0.5 : 1);
+    this.hero.setAlpha(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 0.55 : 1);
     this.hero.setDepth(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 900 : 500 + this.fy);
     this.shadow.setPosition(this.fx, this.fy + 2);
-    this.shadow.setScale(sc / 0.34, sc / 0.34);
+    this.shadow.setScale(sc / 0.37, sc / 0.37);
     this.shadow.setAlpha(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 0.15 : 0.35);
   }
 
@@ -403,7 +462,7 @@ export class AdventureScene extends Phaser.Scene {
       this.walkResolve = null;
       old(false);
     }
-    const dest = closestPoint({ x, y }, WALK);
+    const dest = closestPoint({ x, y }, walkFor(this.save.room));
     if (Math.hypot(dest.x - this.fx, dest.y - this.fy) < 8) {
       if (Math.abs(dest.x - this.fx) > 2) this.face = dest.x < this.fx ? -1 : 1;
       return Promise.resolve(true);
@@ -437,8 +496,11 @@ export class AdventureScene extends Phaser.Scene {
       const top = this.hero.y - this.hero.displayHeight - 6;
       return { x: this.hero.x, y: Phaser.Math.Clamp(top, 150, 520) };
     }
-    if (who === 'edith') return { x: 180, y: 150 };
-    if (who === 'june') return { x: 620, y: 220 };
+    if (who === 'edith') return { x: 860, y: 150 };
+    if (who === 'june' && this.june?.active) {
+      return { x: this.june.x, y: this.june.y - this.june.displayHeight - 10 };
+    }
+    if (who === 'june') return { x: 620, y: 200 };
     if (this.ghost?.visible) return { x: this.ghost.x, y: this.ghost.y - this.ghost.displayHeight - 8 };
     return { x: 900, y: 220 };
   }
@@ -563,6 +625,7 @@ export class AdventureScene extends Phaser.Scene {
 
   private refresh(): void {
     this.spots = spotsFor(this.save, this.save.room);
+    this.syncScenery();
     this.ensureEndingDressing();
     this.syncGhost();
     this.redrawHud();

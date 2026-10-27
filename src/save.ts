@@ -13,7 +13,7 @@ export type Flag =
 export type Speaker = 'detective' | 'edith' | 'june' | 'ambrose';
 
 export type Save = {
-  version: 3;
+  version: 4;
   room: RoomId;
   entry: string;
   x: number;
@@ -38,12 +38,12 @@ export const ITEM_NAME: Record<ItemId, string> = {
 
 export function freshSave(): Save {
   return {
-    version: 3,
+    version: 4,
     room: 'office',
     entry: 'start',
-    x: 940,
-    y: 568,
-    face: -1,
+    x: 480,
+    y: 578,
+    face: 1,
     items: [],
     flags: {},
     learnedTap: false,
@@ -55,11 +55,11 @@ export function loadSave(): Save {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return freshSave();
     const parsed = JSON.parse(raw) as Partial<Save>;
-    if (!parsed || parsed.version !== 3) return freshSave();
+    if (!parsed || parsed.version !== 4) return freshSave();
     if (!parsed.room || !ROOMS.has(parsed.room)) return freshSave();
     if (typeof parsed.x !== 'number' || typeof parsed.y !== 'number') return freshSave();
     return {
-      version: 3,
+      version: 4,
       room: parsed.room,
       entry: typeof parsed.entry === 'string' ? parsed.entry : 'start',
       x: parsed.x,

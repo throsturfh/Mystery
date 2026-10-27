@@ -2,7 +2,7 @@
 
 A landscape point-and-click mystery. You play a paranormal detective on **Case 0: The Bellweather Bookshop**. Edith Crane runs dispatch. June Bellweather keeps the shop. Ambrose, her grandfather, has not quite left.
 
-The scenes are the original paintings. Speech sits over the speaker's head. Portrait phones are asked to turn sideways.
+The rooms are side-view stages. Speech sits over the speaker's head. Portrait phones are asked to turn sideways.
 
 ## Run
 

@@ -16,6 +16,16 @@ export class BootScene extends Phaser.Scene {
     this.load.image('edith', asset('edith.jpg'));
     this.load.image('ambrose', asset('ambrose.png'));
     this.load.image('detective', asset('detective.png'));
+    this.load.image('detective-0', asset('detective-0.png'));
+    this.load.image('detective-1', asset('detective-1.png'));
+    this.load.image('detective-2', asset('detective-2.png'));
+    this.load.image('detective-3', asset('detective-3.png'));
+    this.load.image('june', asset('june.png'));
+    this.load.image('prop-book', asset('prop-book.png'));
+    this.load.image('prop-matches', asset('prop-matches.png'));
+    this.load.image('prop-match-cover', asset('prop-match-cover.png'));
+    this.load.image('prop-ledger', asset('prop-ledger.png'));
+    this.load.image('prop-pencil', asset('prop-pencil.png'));
   }
 
   create(): void {

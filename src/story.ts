@@ -50,29 +50,63 @@ export interface Ctx {
   wait(ms: number): Promise<void>;
 }
 
-export const WALK: Pt[] = [
-  { x: 150, y: 508 },
-  { x: 1130, y: 508 },
-  { x: 1180, y: 602 },
-  { x: 100, y: 602 },
-];
+/** Open floor in front of the furniture. Back edge is the far boards, front edge sits just above the inventory. */
+export const WALKS: Record<RoomId, Pt[]> = {
+  office: [
+    { x: 170, y: 535 },
+    { x: 1120, y: 535 },
+    { x: 1200, y: 602 },
+    { x: 90, y: 602 },
+  ],
+  shop: [
+    { x: 180, y: 535 },
+    { x: 1100, y: 535 },
+    { x: 1180, y: 602 },
+    { x: 100, y: 602 },
+  ],
+  nook: [
+    { x: 160, y: 548 },
+    { x: 1080, y: 548 },
+    { x: 1160, y: 602 },
+    { x: 100, y: 602 },
+  ],
+  stock: [
+    { x: 180, y: 540 },
+    { x: 1080, y: 540 },
+    { x: 1160, y: 602 },
+    { x: 110, y: 602 },
+  ],
+};
+
+export function walkFor(room: RoomId): Pt[] {
+  return WALKS[room];
+}
 
 export const ENTRY: Record<RoomId, Record<string, Spawn>> = {
   office: {
-    start: { x: 940, y: 568, face: -1 },
-    door: { x: 980, y: 568, face: -1 },
+    start: { x: 480, y: 578, face: 1 },
+    door: { x: 280, y: 575, face: 1 },
   },
   shop: {
-    door: { x: 260, y: 568, face: 1 },
-    nook: { x: 1020, y: 560, face: -1 },
-    stock: { x: 520, y: 560, face: -1 },
+    door: { x: 280, y: 575, face: 1 },
+    nook: { x: 980, y: 572, face: -1 },
   },
   nook: {
-    shop: { x: 240, y: 568, face: 1 },
+    shop: { x: 260, y: 575, face: 1 },
+    stock: { x: 960, y: 572, face: -1 },
   },
   stock: {
-    shop: { x: 260, y: 568, face: 1 },
+    shop: { x: 280, y: 575, face: 1 },
   },
+};
+
+/** Top-left of a cut-out that sits exactly over the painted object. */
+export const PROP_AT = {
+  book: { x: 380, y: 304 },
+  matches: { x: 162, y: 442 },
+  ledger: { x: 924, y: 400 },
+  pencil: { x: 900, y: 346 },
+  shelfBook: { x: 470, y: 188 },
 };
 
 const spot = (
@@ -94,57 +128,57 @@ export function spotsFor(save: Save, room: RoomId): Spot[] {
   const f = save.flags;
   if (room === 'office') {
     return [
-      spot('thermos', 'the thermos', 400, 500, 32, 36, 460, 568, -1, "Edith's thermos. The tea is a crime scene of its own.", 'look'),
-      spot('folder', 'the case folder', 640, 490, 90, 40, 640, 575, -1, f.seenEnding ? 'Stamped shut. Edith will pretend not to be pleased.' : 'The Bellweather file. A shop, a key, and a man who will not stay shelved.', 'look'),
-      spot('phone', 'the phone', 880, 480, 50, 40, 800, 568, 1, 'A rotary phone. It only rings when the news is inconvenient.', 'look'),
-      spot('coat', 'the coat rack', 100, 500, 48, 90, 220, 568, -1, 'Spare coats. None of them have given notice.', 'look'),
-      spot('edith', 'Edith', 200, 250, 110, 150, 380, 560, -1, "Edith Crane. Dispatch, tea, and a filing system that frightens the dead.", 'edith'),
-      spot('office-door', 'the street', 1180, 380, 80, 140, 1040, 568, 1, 'The door to the street, and to other people\'s problems.', 'exit', { to: 'shop', entry: 'door' }),
+      spot('phone', 'the phone', 1120, 338, 42, 26, 1000, 572, 1, 'A rotary phone. It only rings when the news is inconvenient.', 'look'),
+      spot('lamp', 'the lamp', 1040, 300, 46, 40, 960, 570, 1, 'A green lamp. It makes the paperwork look more important than it is.', 'look'),
+      spot('edith', 'Edith', 1088, 214, 48, 64, 980, 568, 1, "Edith Crane. Dispatch, tea, and a filing system that frightens the dead.", 'edith'),
+      spot('board', 'the case board', 700, 230, 150, 90, 640, 568, 1, f.seenEnding ? 'The board can rest. Edith will pretend not to be pleased.' : 'The Bellweather file, pinned where it cannot sneak off.', 'look'),
+      spot('cabinet', 'the filing cabinet', 900, 290, 70, 90, 820, 568, 1, 'A filing cabinet. Something in the third drawer is humming, which is not a filing habit.', 'look'),
+      spot('chair', 'the rocking chair', 760, 400, 80, 70, 680, 578, 1, 'A rocking chair. It moves when the room is being honest.', 'look'),
+      spot('window', 'the window', 440, 250, 100, 110, 440, 568, -1, 'Rain on the glass. The city is minding its own business, for once.', 'look'),
+      spot('coat', 'the coat rack', 230, 370, 55, 120, 320, 575, -1, 'Spare coats. None of them have given notice.', 'look'),
+      spot('side-door', 'the side door', 1210, 310, 60, 150, 1060, 575, 1, 'A dark doorway. It leads out, which is the polite thing for a doorway to do.', 'exit', { to: 'shop', entry: 'door' }),
+      spot('office-door', 'the street', 95, 280, 75, 180, 250, 575, -1, 'The street door. Other people\'s problems live on the far side.', 'exit', { to: 'shop', entry: 'door' }),
     ];
   }
   if (room === 'shop') {
     return [
-      spot('pencil', 'the pencil', 470, 500, 32, 24, 500, 575, -1, f.ledgerWritten ? 'The pencil already suffered for literature.' : 'A pencil with bite marks. Someone was thinking, or fretting.', 'pencil'),
-      spot('doorbell', 'the doorbell', 175, 175, 36, 28, 250, 545, -1, 'The doorbell. It rings for empty pavements, which is rude even for brass.', 'look'),
-      spot('globe', 'the globe', 800, 485, 40, 36, 760, 568, 1, 'A globe. Every country on it is closed at this hour.', 'look'),
-      spot('typewriter', 'the typewriter', 980, 495, 55, 34, 900, 560, 1, 'A typewriter. The ribbon is the colour of old apologies.', 'look'),
-      spot('umbrella', 'the umbrella stand', 360, 530, 40, 50, 400, 575, -1, 'The umbrella stand. Fully occupied. No spare hauntings.', 'look'),
-      spot('ladder', 'the ladder', 70, 520, 36, 90, 180, 575, -1, 'A ladder. For people who trust both gravity and fiction.', 'look'),
-      spot('shelf', 'the shelf', 640, 110, 160, 48, 640, 530, -1, f.bookShelved ? 'The poets have their neighbour back. The gap looks disappointed.' : 'A gap between the poets, the size of one slim green book.', 'shelf'),
-      spot('june', 'June', 620, 410, 80, 55, 620, 568, -1, 'June Bellweather. Arms folded in a way that counts as a lock.', 'june'),
-      spot('stock-door', 'the stockroom door', 1060, 390, 50, 100, 960, 560, 1, 'A narrow door beside the arch, painted the same brown as a secret.', 'stock'),
-      spot('door-out', 'dispatch', 165, 400, 70, 120, 280, 568, -1, 'The street door. Dispatch is three streets of drizzle away.', 'exit', { to: 'office', entry: 'door' }),
-      spot('nook-arch', 'the nook', 1220, 420, 55, 130, 1080, 555, 1, 'An arch to the reading nook. It smells of cold tea and patience.', 'exit', { to: 'nook', entry: 'shop' }),
+      spot('pencil', 'the pencil', 948, 362, 48, 20, 900, 572, 1, f.ledgerWritten ? 'The pencil already suffered for literature.' : 'A pencil, left on the counter. Someone was thinking, or fretting.', 'pencil'),
+      spot('doorbell', 'the doorbell', 130, 150, 28, 24, 250, 562, -1, 'The doorbell. It rings for empty pavements, which is rude even for brass.', 'look'),
+      spot('register', 'the cash register', 820, 300, 70, 46, 780, 568, 1, 'The till. It has opinions about being dead, and they are unfavourable.', 'look'),
+      spot('daybook', 'the daybook', 960, 338, 55, 22, 920, 568, 1, 'The shop daybook, open on nothing in particular. The real ledger is sulking elsewhere.', 'look'),
+      spot('shop-lamp', 'the lamp', 1045, 310, 44, 40, 980, 568, 1, 'A green lamp. Under it, even a receipt looks like a confession.', 'look'),
+      spot('shelf', 'the shelf', 470, 200, 90, 46, 470, 558, -1, f.bookShelved ? 'The poets have their neighbour back. The gap looks disappointed.' : 'A gap on the second shelf, the size of one slim green book.', 'shelf'),
+      spot('june', 'June', 640, 400, 80, 130, 640, 578, 1, 'June Bellweather. Arms folded in a way that counts as a lock.', 'june'),
+      spot('door-out', 'dispatch', 110, 280, 75, 180, 260, 575, -1, 'The street door. Dispatch is three streets of drizzle away.', 'exit', { to: 'office', entry: 'door' }),
+      spot('nook-arch', 'the nook', 1185, 320, 70, 155, 1020, 572, 1, 'An arch to the reading nook. It smells of cold tea and patience.', 'exit', { to: 'nook', entry: 'shop' }),
     ];
   }
   if (room === 'nook') {
     return [
-      spot('matches', 'the matches', 180, 480, 40, 28, 280, 560, -1, f.lanternLit ? 'The saucer remembers a matchbox. The matchbox has moved on.' : 'A matchbox beside a teacup that has given up.', 'matches'),
-      spot('book', 'the green book', 700, 545, 50, 28, 680, 580, 1, f.bookShelved ? 'The chair has lost its argument with the book.' : 'A slim green book. The Lantern and the Lock. It hates this chair.', 'book'),
-      spot('lamp', 'the lamp', 260, 420, 36, 100, 340, 560, -1, 'A floor lamp with a fringed shade. It is trying very hard to be a ghost.', 'look'),
-      spot('chair', 'the chair', 620, 500, 120, 85, 600, 575, 1, 'The wingback. Ambrose\'s shape is still in it, like a dent in the air.', 'look'),
-      spot('clock', 'the clock', 640, 90, 40, 32, 640, 530, -1, 'A clock. It keeps shop hours, including the ones after death.', 'look'),
-      spot('cat', 'the cat', 1120, 200, 36, 36, 1000, 548, 1, 'A ceramic cat. It has judged every customer since 1952, including you.', 'look'),
-      spot('nook-exit', 'the shop', 70, 420, 60, 140, 200, 568, -1, 'Back to the shop floor, where June is counting your mistakes.', 'exit', { to: 'shop', entry: 'nook' }),
+      spot('matches', 'the matches', 186, 450, 32, 16, 250, 578, -1, f.lanternLit ? 'The side table remembers a matchbox. The matchbox has moved on.' : 'A matchbox on the side table. The table has stopped expecting company.', 'matches'),
+      spot('book', 'the green book', 422, 318, 46, 20, 460, 575, -1, f.bookShelved ? 'The low shelf has lost its argument with the book.' : 'A slim green book. The Lantern and the Lock. It hates this shelf.', 'book'),
+      spot('nook-lamp', 'the lamp', 185, 200, 28, 44, 250, 568, -1, 'A wall lamp. It is trying very hard to be a ghost.', 'look'),
+      spot('chair', 'the chair', 340, 400, 100, 90, 460, 580, -1, 'The armchair. Ambrose\'s shape is still in it, like a dent in the air.', 'look'),
+      spot('round-window', 'the round window', 470, 200, 55, 50, 470, 565, -1, 'A round window. The rain has a favourite chair out there too.', 'look'),
+      spot('bookcase', 'the bookcase', 820, 280, 180, 140, 720, 568, 1, 'A bookcase with no gaps worth trusting. The one that matters is back in the shop.', 'look'),
+      spot('stock-door', 'the stockroom door', 1165, 310, 65, 155, 1000, 572, 1, 'The stockroom door. It has the look of a place that keeps old accounts.', 'stock'),
+      spot('nook-exit', 'the shop', 90, 280, 70, 175, 240, 575, -1, 'Back to the shop floor, where June is counting your mistakes.', 'exit', { to: 'shop', entry: 'nook' }),
     ];
   }
   if (!save.flags.lanternLit) {
     return [
-      spot('stock-exit', 'the shop', 130, 420, 80, 140, 260, 568, -1, 'The way back. Even the dark will lend you the door.', 'exit', { to: 'shop', entry: 'stock' }),
-      spot('dark', 'the dark', 640, 380, 520, 240, 640, 560, 1, 'Pitch dark. The lantern coughs and will not catch.', 'dark'),
+      spot('stock-exit', 'the nook', 100, 270, 80, 175, 260, 575, -1, 'The way back. Even the dark will lend you the door.', 'exit', { to: 'nook', entry: 'stock' }),
+      spot('dark', 'the dark', 700, 360, 480, 220, 640, 570, 1, 'Pitch dark. The lantern coughs and will not catch.', 'dark'),
     ];
   }
   return [
-    spot('ledger', 'the ledger', 640, 500, 110, 40, 640, 575, -1, f.ledgerWritten ? 'The ledger is closed. The last line has stopped fidgeting.' : "Ambrose's ledger, open on a half-finished sale.", 'ledger'),
-    spot('horse', 'the rocking horse', 1020, 555, 80, 46, 900, 585, 1, 'A rocking horse. It knows a secret and will only tell the floor.', 'look'),
-    spot('hat', 'the hat', 230, 240, 40, 32, 300, 545, -1, 'A felt hat on a peg. It has outlived the head that chose it.', 'look'),
-    spot('mirror', 'the mirror', 400, 220, 48, 56, 430, 545, -1, 'A mirror. It is considering whether you count as company.', 'look'),
-    spot('cardigan', 'the cardigan', 200, 500, 50, 80, 300, 568, -1, 'A cardigan, folded as if someone meant to come back for the evening.', 'look'),
-    spot('spare-lantern', 'the spare lantern', 900, 260, 36, 48, 820, 548, 1, 'A spare lantern. Yours is the jealous kind.', 'look'),
-    spot('cage', 'the birdcage', 1140, 280, 48, 60, 980, 548, 1, 'An empty birdcage. Something left, and was polite about the door.', 'look'),
-    spot('stock-exit', 'the shop', 130, 420, 80, 140, 260, 568, -1, 'The door to the shop. June is probably listening.', 'exit', { to: 'shop', entry: 'stock' }),
+    spot('ledger', 'the ledger', 1010, 416, 95, 22, 900, 572, 1, f.ledgerWritten ? 'The desk is clear. The last line has stopped fidgeting.' : "Ambrose's ledger, open on a half-finished sale.", 'ledger'),
+    spot('moon', 'the window', 470, 110, 40, 36, 470, 558, -1, 'A little window, and a moon that has not been introduced.', 'look'),
+    spot('cobwebs', 'the shelves', 560, 280, 140, 120, 520, 568, 1, 'Shelves, cobwebs, and the feeling of being counted.', 'look'),
+    spot('crates', 'the crates', 480, 450, 70, 40, 480, 578, -1, 'Crates. Something in them has already left, politely.', 'look'),
+    spot('stock-exit', 'the nook', 100, 270, 80, 175, 260, 575, -1, 'The door to the nook. June is probably listening.', 'exit', { to: 'nook', entry: 'stock' }),
     ...(save.flags.ledgerWritten && !save.flags.ambroseBye
-      ? [spot('ambrose', 'Ambrose', 900, 430, 70, 130, 760, 568, 1, 'Ambrose Bellweather. Pale as a receipt, and about as easy to file.', 'ambrose')]
+      ? [spot('ambrose', 'Ambrose', 780, 400, 80, 140, 700, 575, 1, 'Ambrose Bellweather. Pale as a receipt, and about as easy to file.', 'ambrose')]
       : []),
   ];
 }
@@ -161,13 +195,13 @@ export function hintFor(save: Save): string {
   if (f.seenEnding) return 'That is the case. The envelope keeps. So does Edith.';
   if (f.ambroseBye) return 'Back to dispatch. Edith has an envelope and a professional frown.';
   if (f.ledgerWritten && !f.ambroseAsked) return 'Ambrose is in the stockroom. Talk to him. He does not charge by the hour.';
-  if (f.ambroseAsked && !has('book') && !f.bookShelved) return 'The slim green book is on the chair in the nook. Chairs cannot be trusted with literature.';
+  if (f.ambroseAsked && !has('book') && !f.bookShelved) return 'The slim green book is on the low shelf in the nook, beside the chair.';
   if (f.ambroseAsked && has('book')) return 'Use the book on the gap in the shop shelf, between the poets.';
   if (has('ledger') && has('pencil')) return 'Put the pencil to the ledger. The last line wants to be a sale.';
   if (!has('pencil') && !f.ledgerWritten && has('key')) return "There is a chewed pencil on June's counter. Take it before the back room eats you.";
-  if (f.lanternLit && !has('ledger') && !f.ledgerWritten) return "The stockroom desk is keeping Ambrose's ledger, now that you can see.";
+  if (f.lanternLit && !has('ledger') && !f.ledgerWritten) return 'The stockroom is the far door in the nook. The desk is keeping Ambrose\'s ledger, now that you can see.';
   if (!f.lanternLit && has('matches') && has('lantern')) return 'Combine the matches with your lantern. Even a ghost can do that sum.';
-  if (!f.lanternLit && !has('matches')) return 'The reading nook keeps matches beside the cold teacup.';
+  if (!f.lanternLit && !has('matches')) return 'The reading nook keeps a matchbox on the side table.';
   if (!has('key')) return "Talk to June. She wants Ambrose's name, not a sales pitch.";
   if (!has('pencil') && !f.ledgerWritten) return "There's a chewed pencil on June's counter. It has already suffered enough.";
   return 'Walk the rooms. Long-press a thing, or tap Look, if you only want the joke.';
@@ -214,7 +248,7 @@ export async function perform(spot: Spot, ctx: Ctx): Promise<void> {
       await pick(ctx, 'matches', 'Matches, beside a teacup that has given up.', 'The matches have done their one brave thing.');
       return;
     case 'book':
-      await pick(ctx, 'book', 'The Lantern and the Lock. It was sulking on the chair.', 'The book is on its shelf, looking smug.');
+      await pick(ctx, 'book', 'The Lantern and the Lock. It was sulking on the low shelf.', 'The book is on its shelf, looking smug.');
       return;
     case 'ledger':
       await pick(ctx, 'ledger', "Ambrose's ledger. The last line is only half a thought.", 'The ledger is finished. The desk can rest.');
@@ -254,7 +288,7 @@ async function pick(ctx: Ctx, item: ItemId, line: string, gone: string): Promise
 }
 
 async function leave(ctx: Ctx, spot: Spot): Promise<void> {
-  if (spot.id === 'office-door' && !ctx.flag('introDone')) {
+  if ((spot.id === 'office-door' || spot.id === 'side-door') && !ctx.flag('introDone')) {
     await ctx.say('edith', 'I am not finished. I am rarely finished, but I am especially not finished.');
     return;
   }
@@ -405,10 +439,10 @@ export async function ambroseTree(ctx: Ctx): Promise<void> {
     'A very sensible question. I respect it, which is unusual for me.',
   ];
   await ctx.say('ambrose', replies[choice] ?? replies[0]!);
-  await ctx.say('ambrose', 'There is a slim green book. The Lantern and the Lock. I left it on the nook chair, like a fool.');
+  await ctx.say('ambrose', 'There is a slim green book. The Lantern and the Lock. I left it on the low shelf in the nook, like a fool.');
   await ctx.say('ambrose', 'It belongs in the gap on the shop shelf, between the poets. Put it back, and I can lock up.');
   if (ctx.has('book')) await ctx.say('ambrose', 'You have it on you. Heavier than it looks. The shelf knows the way.');
-  else await ctx.say('ambrose', 'The chair in the nook is minding it. Chairs are terrible minders.');
+  else await ctx.say('ambrose', 'The low shelf in the nook is minding it. Shelves are terrible minders.');
   ctx.setFlag('ambroseAsked', true);
 }
 
