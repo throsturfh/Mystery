@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#070b14" />
     <meta
       name="description"
-      content="Hollowmere Dispatch — a ghost-themed mystery clicker. Case 0: The Bellweather Bookshop."
+      content="Hollowmere Dispatch — a ghostly point-and-click. Case 0: The Bellweather Bookshop."
     />
     <title>Hollowmere Dispatch</title>
     <link rel="icon" href="%BASE_URL%favicon.svg" type="image/svg+xml" />
@@ -17,27 +17,12 @@
   <body>
     <div id="rotate" aria-hidden="true">
       <p>Turn your phone sideways</p>
-      <span>The shop is wider than it is tall.</span>
+      <span>The case is wider than it is tall.</span>
     </div>
     <div id="game">
       <p id="loading">Lighting the lamps…</p>
     </div>
-    <div id="nameplate" hidden>
-      <label for="detective-name">Name on the door</label>
-      <input
-        id="detective-name"
-        name="detective-name"
-        maxlength="16"
-        autocomplete="off"
-        autocapitalize="words"
-        enterkeyhint="done"
-        placeholder="e.g. Rowan Hale"
-      />
-      <button type="button" id="name-confirm">Engrave</button>
-      <p id="name-error"></p>
-    </div>
     <div id="live" class="sr-only" aria-live="polite"></div>
-    <div id="debug-step" hidden></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

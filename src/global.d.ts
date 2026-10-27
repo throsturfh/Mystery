@@ -2,15 +2,19 @@ export {};
 
 declare global {
   interface Window {
-    __hollowmere?: {
-      ready: boolean;
-      width: number;
-      height: number;
-      regions: Record<string, { x: number; y: number; w: number; h: number }>;
-      beatReady: boolean;
-      getSave: () => unknown;
-      debugSetLastTick: (ts: number) => void;
-      last: { x: number; y: number } | null;
+    __hollow?: {
+      room: string;
+      mode: string;
+      speech: string | null;
+      choices: { label: string; x: number; y: number }[];
+      spots: { id: string; name: string; x: number; y: number }[];
+      items: { id: string; x: number; y: number }[];
+      player: { x: number; y: number };
+      flags: Partial<Record<string, boolean>>;
+      moving: boolean;
+      busy: boolean;
+      dark: boolean;
+      envelope: boolean;
     };
   }
 }
