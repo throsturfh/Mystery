@@ -36,8 +36,10 @@ export class BootScene extends Phaser.Scene {
       for (const id of hats) this.load.image(`L-${frame}-hat-${id}`, asset(`layers/${frame}-hat-${id}.png`));
       for (const id of scarves) this.load.image(`L-${frame}-scarf-${id}`, asset(`layers/${frame}-scarf-${id}.png`));
     }
+    for (let i = 0; i < 8; i++) this.load.image(`skuggi-walk-${i}`, asset(`cast/skuggi-walk-${i}.png`));
     for (const who of CAST) {
-      for (const frame of frames) {
+      const castFrames = who === 'sara' ? frames : [...frames, 'walk-6', 'walk-7', 'walk-8', 'walk-9'];
+      for (const frame of castFrames) {
         this.load.image(`L-${who}-${frame}-base`, asset(`cast/${who}/${frame}-base.png`));
         for (const id of coats) this.load.image(`L-${who}-${frame}-coat-${id}`, asset(`cast/${who}/${frame}-coat-${id}.png`));
         for (const id of hats) this.load.image(`L-${who}-${frame}-hat-${id}`, asset(`cast/${who}/${frame}-hat-${id}.png`));

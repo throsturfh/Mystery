@@ -47,7 +47,7 @@ export interface Ctx {
   setFlag(name: Flag, value: boolean): void;
   room(): RoomId;
   go(room: RoomId, entry: string): Promise<void>;
-  pose(kind: 'look' | 'pick'): void;
+  pose(kind: 'look' | 'pick' | 'give' | 'receive' | 'write' | 'shelf' | 'talk'): void;
   refresh(): void;
   showGhost(on: boolean): void;
   revealRoom(): void;
@@ -440,6 +440,7 @@ async function intro(ctx: Ctx): Promise<void> {
   ];
   await ctx.say('edith', replies[choice] ?? replies[0]!);
   await ctx.say('edith', 'Take the lantern. It has a dramatic streak. The wick does not.');
+  ctx.pose('receive');
   ctx.add('lantern');
   ctx.setFlag('introDone', true);
   ctx.refresh();
@@ -566,6 +567,7 @@ export async function ambroseTree(ctx: Ctx): Promise<void> {
   ];
   await ctx.say('ambrose', replies[choice] ?? replies[0]!);
   await ctx.say('ambrose', 'There is a slim green book. The Lantern and the Lock. I left it on the low shelf in the nook, like a fool.');
+  ctx.pose('give');
   await ctx.say('ambrose', 'It belongs in the gap on the shop shelf, between the poets. Put it back, and I can lock up.');
   if (ctx.has('book')) await ctx.say('ambrose', 'You have it on you. Heavier than it looks. The shelf knows the way.');
   else await ctx.say('ambrose', 'The low shelf in the nook is minding it. Shelves are terrible minders.');
@@ -581,7 +583,7 @@ export async function writeLedger(ctx: Ctx): Promise<void> {
     await ctx.say('detective', 'A last line needs both a pencil and the ledger.');
     return;
   }
-  ctx.pose('pick');
+  ctx.pose('write');
   await ctx.say('detective', 'You fill the last line. One copy of The Lantern and the Lock, sold to A. Bellweather.');
   ctx.remove('pencil');
   ctx.remove('ledger');
@@ -623,7 +625,7 @@ export async function shelve(ctx: Ctx): Promise<void> {
     await ctx.say('detective', 'The gap stays cold. Something else wants finishing first.');
     return;
   }
-  ctx.pose('pick');
+  ctx.pose('shelf');
   ctx.remove('book');
   await ctx.settleBook();
   ctx.setFlag('bookShelved', true);

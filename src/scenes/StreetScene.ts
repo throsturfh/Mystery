@@ -3,6 +3,7 @@ import { audio } from '../audio';
 import { H, W } from '../config';
 import { ENTRY } from '../story';
 import { loadSave, writeSave, type RoomId } from '../save';
+import { figurePixels, opaqueHeight, strideCount } from '../figure';
 import { idleKey, paintHero, walkKey } from '../tint';
 
 const FONT = 'Cormorant Garamond, Georgia, serif';
@@ -79,7 +80,7 @@ export class StreetScene extends Phaser.Scene {
       this.stride += step;
       if (this.stride > 14) {
         this.stride = 0;
-        this.frame = (this.frame + 1) % 6;
+        this.frame = (this.frame + 1) % strideCount(save.detective);
         if (this.frame % 3 === 0) audio.play('foot');
       }
       const key = walkKey(profile, this.frame);
@@ -87,16 +88,24 @@ export class StreetScene extends Phaser.Scene {
     } else {
       const key = idleKey(profile);
       if (this.hero.texture.key !== key) this.hero.setTexture(key);
-      this.hero.setPosition(this.x, 600).setScale(0.24);
+      this.hero.setPosition(this.x, 600);
+      this.fitStreet(this.hero, 600);
       this.arrive();
       return;
     }
     const t = (this.x - 180) / Math.max(1, this.goal - 180);
     const y = 640 - t * (this.dest === 'lantern' ? 70 : 40);
-    const sc = 0.32 - t * 0.08;
-    this.hero.setPosition(this.x, y).setScale(sc).setFlipX(false);
+    this.hero.setPosition(this.x, y).setFlipX(false);
+    this.fitStreet(this.hero, y);
     const dog = this.children.getByName('skuggi') as Phaser.GameObjects.Image | null;
-    if (dog?.active) dog.setPosition(this.x - 78, y + 8).setScale(sc * 0.9);
+    if (dog?.active) {
+      const frame = Math.floor(this.x / 18) % 8;
+      const key = `skuggi-walk-${frame}`;
+      if (this.textures.exists(key)) dog.setTexture(key);
+      dog.setPosition(this.x - 78, y + 6);
+      const source = dog.texture.getSourceImage() as CanvasImageSource;
+      dog.setScale((figurePixels(y) * 0.42) / opaqueHeight(source, dog.texture.key));
+    }
   }
 
   private arrive(): void {
@@ -124,6 +133,11 @@ export class StreetScene extends Phaser.Scene {
     save.face = spawn?.face ?? 1;
     writeSave(save);
     this.time.delayedCall(40, () => this.leave('adventure'));
+  }
+
+  private fitStreet(image: Phaser.GameObjects.Image, y: number): void {
+    const source = image.texture.getSourceImage() as CanvasImageSource;
+    image.setScale(figurePixels(y) / opaqueHeight(source, image.texture.key));
   }
 
   private leave(next: string): void {

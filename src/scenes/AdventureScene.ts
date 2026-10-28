@@ -22,6 +22,7 @@ import {
   type Verb,
 } from '../story';
 import { detectiveById } from '../detectives';
+import { figurePixels, opaqueHeight, strideCount } from '../figure';
 import { idleKey, paintHero, walkKey } from '../tint';
 import { aside } from '../voices';
 
@@ -43,8 +44,9 @@ export class AdventureScene extends Phaser.Scene {
   private walking = false;
   private goal: { x: number; y: number } | null = null;
   private walkResolve: ((ok: boolean) => void) | null = null;
-  private pose: 'none' | 'look' | 'pick' = 'none';
+  private pose: 'none' | 'look' | 'pick' | 'give' | 'receive' | 'write' | 'shelf' | 'talk' = 'none';
   private poseUntil = 0;
+  private poseFrom = 0;
   private hero!: Phaser.GameObjects.Image;
   private shadow!: Phaser.GameObjects.Ellipse;
   private ghost?: Phaser.GameObjects.Image;
@@ -248,7 +250,7 @@ export class AdventureScene extends Phaser.Scene {
         const per = 16;
         while (this.stride >= per) {
           this.stride -= per;
-          this.walkFrame = (this.walkFrame + 1) % 6;
+          this.walkFrame = (this.walkFrame + 1) % strideCount(this.save.detective);
           if (this.walkFrame % 3 === 0) audio.play('foot');
         }
         this.place(this.fx + (dx / dist) * step, this.fy + (dy / dist) * step, dx < 0 ? -1 : 1);
@@ -286,7 +288,9 @@ export class AdventureScene extends Phaser.Scene {
       go: (room, entry) => this.changeRoom(room, entry),
       pose: (kind) => {
         this.pose = kind;
-        this.poseUntil = this.time.now + (kind === 'pick' ? 320 : 460);
+        this.poseFrom = this.time.now;
+        const hold = kind === 'write' ? 980 : kind === 'pick' || kind === 'shelf' ? 640 : 520;
+        this.poseUntil = this.time.now + hold;
       },
       refresh: () => this.refresh(),
       showGhost: (on) => this.showGhost(on),
@@ -460,7 +464,8 @@ export class AdventureScene extends Phaser.Scene {
     }
     const pos = this.save.room === 'shop' ? { x: 180, y: 590 } : { x: 760, y: 590 };
     if (!this.ghost || !this.ghost.active) {
-      this.ghost = this.add.image(pos.x, pos.y, 'ambrose').setOrigin(0.5, 1).setAlpha(0).setDepth(420).setScale(0.62);
+      this.ghost = this.add.image(pos.x, pos.y, 'ambrose').setOrigin(0.5, 1).setAlpha(0).setDepth(420);
+      this.fit(this.ghost, pos.y, 0.9);
       this.tweens.add({ targets: this.ghost, alpha: 0.92, duration: 700 });
     }
     this.ghost.setPosition(pos.x, pos.y).setVisible(true).setDepth(420);
@@ -501,19 +506,37 @@ export class AdventureScene extends Phaser.Scene {
 
   private placeDog(): void {
     if (this.save.detective !== 'sara' || !this.textures.exists('skuggi')) return;
-    this.dog = this.add.image(this.fx - 96, this.fy + 6, 'skuggi').setOrigin(0.5, 1).setScale(0.32).setDepth(500 + this.fy);
+    this.dog = this.add.image(this.fx - 96, this.fy + 6, 'skuggi').setOrigin(0.5, 1).setDepth(500 + this.fy);
+    this.fit(this.dog, this.fy, 0.42);
     this.props.push(this.dog);
   }
+
+  private dogFrame = 0;
+  private dogStride = 0;
 
   private drawDog(): void {
     const dog = this.dog;
     if (!dog?.active) return;
-    const goalX = this.fx - this.face * 86;
-    const goalY = this.fy + 4;
+    const goalX = this.fx - this.face * 78;
+    const goalY = this.fy + 2;
+    const step = Math.hypot(goalX - dog.x, goalY - dog.y);
     dog.x += (goalX - dog.x) * 0.08;
     dog.y += (goalY - dog.y) * 0.12;
     dog.setFlipX(dog.x > this.fx);
     dog.setDepth(490 + dog.y);
+    if (step > 8) {
+      this.dogStride += step;
+      if (this.dogStride > 14) {
+        this.dogStride = 0;
+        this.dogFrame = (this.dogFrame + 1) % 8;
+        const key = `skuggi-walk-${this.dogFrame}`;
+        if (this.textures.exists(key)) dog.setTexture(key);
+      }
+    } else if (dog.texture.key !== 'skuggi') {
+      dog.setTexture('skuggi');
+    }
+    this.fit(dog, dog.y, 0.42);
+    dog.setAngle(step > 8 ? Math.sin(this.time.now / 180) * 1.4 : 0);
   }
 
   private glideBook(): Promise<void> {
@@ -693,7 +716,8 @@ export class AdventureScene extends Phaser.Scene {
     if (room === 'shop') {
       this.addScenery('shelf-green', 498, 198, 0.5, 1, 16, () => f.bookShelved === true, 0.62);
       this.addScenery('prop-pencil', 972, 372, 0.45, 0.82, 16, () => !has('pencil'), 0.28);
-      this.june = this.add.image(620, 585, this.save.flags.gotKey ? 'june-nokeys' : 'june').setOrigin(0.5, 1).setScale(0.33).setDepth(500 + 585);
+      this.june = this.add.image(620, 585, this.save.flags.gotKey ? 'june-nokeys' : 'june').setOrigin(0.5, 1).setDepth(500 + 585);
+      this.fit(this.june, 585, 0.92);
       this.props.push(this.june);
     }
     this.placeDog();
@@ -724,44 +748,50 @@ export class AdventureScene extends Phaser.Scene {
     this.save.face = face;
   }
 
-  private scaleFor(y: number): number {
-    const t = Phaser.Math.Clamp((y - 535) / (602 - 535), 0, 1);
-    return 0.32 + t * 0.1;
+  private fit(image: Phaser.GameObjects.Image, y: number, portion = 1): void {
+    const source = image.texture.getSourceImage() as CanvasImageSource;
+    const height = opaqueHeight(source, image.texture.key);
+    image.setScale((figurePixels(y) * portion) / height);
+  }
+
+  private gesture(now: number): { angle: number; y: number } {
+    if (now >= this.poseUntil || this.pose === 'none') return { angle: 0, y: 0 };
+    const span = Math.max(1, this.poseUntil - this.poseFrom);
+    const t = (now - this.poseFrom) / span;
+    const env = Math.sin(Math.min(1, Math.max(0, t)) * Math.PI);
+    const lean = this.face < 0 ? -1 : 1;
+    if (this.pose === 'look') return { angle: -7 * env * lean, y: -2 * env };
+    if (this.pose === 'pick') return { angle: 9 * env * lean, y: 5 * env };
+    if (this.pose === 'shelf') return { angle: -11 * env * lean, y: -4 * env };
+    if (this.pose === 'give') return { angle: -8 * env * lean, y: 0 };
+    if (this.pose === 'receive') return { angle: 7 * env * lean, y: 2 * env };
+    if (this.pose === 'write') return { angle: 5 * Math.sin(t * Math.PI * 3) * lean, y: 3 * env };
+    if (this.pose === 'talk') return { angle: Math.sin(t * Math.PI * 4) * 2.2 * lean, y: 0 };
+    return { angle: 0, y: 0 };
   }
 
   private drawHero(_dt: number): void {
-    const sc = this.scaleFor(this.fy);
-    let sx = sc;
-    let sy = sc;
-    let angle = 0;
-    let yoff = 0;
     const posing = this.time.now < this.poseUntil;
     if (!posing) this.pose = 'none';
     const look = this.profile();
     if (this.walking && !posing) {
       const key = walkKey(look, this.walkFrame);
-      if (this.hero.texture.key !== key) this.hero.setTexture(key);
+      if (this.hero.texture.key !== key && this.textures.exists(key)) this.hero.setTexture(key);
     } else {
       const key = idleKey(look);
       if (this.hero.texture.key !== key) this.hero.setTexture(key);
-      yoff = Math.sin(this.time.now / 520) * 1.2;
     }
-    if (posing && this.pose === 'look') {
-      sy *= 1.05;
-      angle += this.face < 0 ? 5 : -5;
-    }
-    if (posing && this.pose === 'pick') {
-      sx *= 1.08;
-      sy *= 0.92;
-    }
-    this.hero.setPosition(this.fx, this.fy + yoff);
+    const breath = this.walking ? 0 : Math.sin(this.time.now / 980) * 1.1;
+    const gesture = this.gesture(this.time.now);
+    this.fit(this.hero, this.fy);
+    this.hero.setPosition(this.fx, this.fy + breath + gesture.y);
     this.hero.setFlipX(this.face < 0);
-    this.hero.setScale(sx, sy);
-    this.hero.setAngle(angle);
+    this.hero.setAngle(gesture.angle);
     this.hero.setAlpha(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 0.55 : 1);
     this.hero.setDepth(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 900 : 500 + this.fy);
     this.shadow.setPosition(this.fx, this.fy + 2);
-    this.shadow.setScale(sc / 0.37, sc / 0.37);
+    const shadow = figurePixels(this.fy) / 320;
+    this.shadow.setScale(shadow, shadow * 0.85);
     this.shadow.setAlpha(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 0.15 : 0.35);
   }
 
@@ -1276,44 +1306,61 @@ export class AdventureScene extends Phaser.Scene {
     return new Promise((resolve) => {
       this.clearSpeech();
       const june = this.june;
-      const toward = this.fx < (june?.x ?? 620) ? -1 : 1;
-      const from = june?.active ? { x: june.x + toward * 78, y: june.y - 250 } : { x: 640, y: 380 };
-      if (june?.active) june.setTexture('june-nokeys');
+      const toward = this.fx < (june?.x ?? 620) ? 1 : -1;
+      const chest = june?.active ? june.y - june.displayHeight * 0.46 : 360;
+      const from = june?.active ? { x: june.x + toward * 8, y: chest } : { x: 640, y: 380 };
+      const offer = june?.active ? { x: june.x + toward * june.displayWidth * 0.55, y: chest - 18 } : { x: 700, y: 360 };
+      this.pose = 'receive';
+      this.poseFrom = this.time.now;
+      this.poseUntil = this.time.now + 1100;
       if (june?.active) {
         this.tweens.add({
           targets: june,
-          x: june.x + toward * 28,
-          duration: 280,
+          angle: toward * -6,
+          x: june.x + toward * 18,
+          duration: 420,
+          ease: 'Sine.easeInOut',
           yoyo: true,
         });
       }
-      this.pose = 'pick';
-      this.poseUntil = this.time.now + 980;
-      const key = this.add.image(from.x, from.y, 'icon-key').setDepth(1400).setDisplaySize(64, 64);
-      const hand = { x: this.fx + this.face * 36, y: this.fy - 168 };
+      const key = this.add.image(from.x, from.y, 'icon-key').setDepth(1400).setDisplaySize(36, 36);
+      const hand = { x: this.fx + this.face * 28, y: this.fy - figurePixels(this.fy) * 0.48 };
       this.tweens.add({
         targets: key,
-        x: hand.x,
-        y: hand.y,
-        duration: 420,
+        x: offer.x,
+        y: offer.y,
+        duration: 380,
         ease: 'Sine.easeOut',
         onComplete: () => {
-          const slot = this.slotCenter(this.save.items.length);
+          if (june?.active) {
+            june.setTexture('june-nokeys');
+            this.fit(june, june.y, 0.92);
+          }
           this.tweens.add({
             targets: key,
-            x: slot.x,
-            y: slot.y,
-            displayWidth: 28,
-            displayHeight: 28,
-            duration: 560,
-            ease: 'Cubic.easeIn',
+            x: hand.x,
+            y: hand.y,
+            duration: 340,
+            ease: 'Sine.easeInOut',
             onComplete: () => {
-              key.destroy();
-              if (!this.save.items.includes('key')) this.save.items.push('key');
-              this.save.flags.gotKey = true;
-              audio.play('pickup');
-              this.redrawHud();
-              resolve();
+              const slot = this.slotCenter(this.save.items.length);
+              this.tweens.add({
+                targets: key,
+                x: slot.x,
+                y: slot.y,
+                displayWidth: 28,
+                displayHeight: 28,
+                duration: 480,
+                ease: 'Cubic.easeIn',
+                onComplete: () => {
+                  key.destroy();
+                  if (!this.save.items.includes('key')) this.save.items.push('key');
+                  this.save.flags.gotKey = true;
+                  audio.play('pickup');
+                  this.redrawHud();
+                  resolve();
+                },
+              });
             },
           });
         },

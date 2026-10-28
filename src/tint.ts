@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { strideCount } from './figure';
 import type { Profile } from './profile';
 
 const FRAMES = ['detective', 'walk-0', 'walk-1', 'walk-2', 'walk-3', 'walk-4', 'walk-5'] as const;
@@ -50,7 +51,8 @@ export function paintPortrait(scene: Phaser.Scene, profile: Profile, outKey: str
 /** Stack pre-painted body, coat, scarf and hat. No runtime colour masking. */
 export function paintHero(scene: Phaser.Scene, profile: Profile): void {
   compose(scene, 'hero', 'detective', profile);
-  for (let i = 0; i < 6; i++) compose(scene, `hero-${i}`, `walk-${i}`, profile);
+  const frames = strideCount(profile.detective || 'crowe');
+  for (let i = 0; i < frames; i++) compose(scene, `hero-${i}`, `walk-${i}`, profile);
 }
 
 export function idleKey(_profile: Profile): string {
