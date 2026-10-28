@@ -239,7 +239,7 @@ function baseSpots(save: Save, room: RoomId): Spot[] {
     ];
   }
   return [
-    spot('ledger', 'the ledger', 1048, 448, 64, 20, 900, 600, 1, f.ledgerWritten ? 'The desk is clear. The last line has stopped fidgeting.' : "Ambrose's ledger, open on a half-finished sale.", 'ledger'),
+    spot('ledger', 'the ledger', 1048, 448, 64, 20, 900, 600, 1, f.ledgerWritten ? 'The ledger lies open on the desk. The last line is the sale: one copy of The Lantern and the Lock, to A. Bellweather.' : "Ambrose's ledger, open on a half-finished sale.", 'ledger'),
     spot('moon', 'the window', 470, 110, 40, 36, 470, 558, -1, 'A little window, and a moon that has not been introduced.', 'look'),
     spot('cobwebs', 'the shelves', 560, 280, 140, 120, 520, 568, 1, 'Shelves, cobwebs, and the feeling of being counted.', 'look'),
     spot('crates', 'the crates', 480, 450, 70, 40, 480, 578, -1, 'Crates. Something in them has already left, politely.', 'look'),
@@ -322,7 +322,7 @@ export async function perform(spot: Spot, ctx: Ctx): Promise<void> {
       await pick(ctx, 'book', 'The Lantern and the Lock. It was sulking on the low shelf.', 'The book is on its shelf, looking smug.');
       return;
     case 'ledger':
-      await pick(ctx, 'ledger', "Ambrose's ledger. The last line is only half a thought.", 'The ledger is finished. The desk can rest.');
+      await pick(ctx, 'ledger', "Ambrose's ledger. The last line is only half a thought.", 'It belongs on the desk. The sale is already written.');
       return;
     case 'stock':
       await openStock(ctx);

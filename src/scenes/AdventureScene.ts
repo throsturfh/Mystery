@@ -295,6 +295,7 @@ export class AdventureScene extends Phaser.Scene {
       profile: () => this.profile(),
       tone: () => this.save.tone,
       quip: (id, fallback) => {
+        if (this.save.flags.ledgerWritten && (id === 'pencil' || id === 'ledger')) return fallback;
         const times = this.lookCounts.get(id) ?? 0;
         this.lookCounts.set(id, times + 1);
         return lookLine(id, fallback, times, this.save.tone, this.save.detective);
@@ -691,7 +692,7 @@ export class AdventureScene extends Phaser.Scene {
     const f = this.save.flags;
     if (room === 'shop') {
       this.addScenery('shelf-green', 498, 198, 0.5, 1, 16, () => f.bookShelved === true, 0.62);
-      this.addScenery('prop-pencil', 972, 372, 0.45, 0.82, 16, () => !has('pencil') && f.ledgerWritten !== true, 0.28);
+      this.addScenery('prop-pencil', 972, 372, 0.45, 0.82, 16, () => !has('pencil'), 0.28);
       this.june = this.add.image(620, 585, this.save.flags.gotKey ? 'june-nokeys' : 'june').setOrigin(0.5, 1).setScale(0.33).setDepth(500 + 585);
       this.props.push(this.june);
     }
@@ -703,6 +704,7 @@ export class AdventureScene extends Phaser.Scene {
     }
     if (room === 'stock' && f.lanternLit === true) {
       this.addScenery('prop-ledger', 1048, 458, 0.5, 0.86, 16, () => !has('ledger') && f.ledgerWritten !== true, 0.28);
+      this.addScenery('prop-ledger-written', 1048, 458, 0.5, 0.86, 16, () => f.ledgerWritten === true, 0.34);
     }
   }
 

@@ -93,6 +93,9 @@ export function loadSave(): Save {
     if (!parsed.room || !ROOMS.has(parsed.room)) return freshSave();
     if (typeof parsed.x !== 'number' || typeof parsed.y !== 'number') return freshSave();
     const flags = parsed.flags && typeof parsed.flags === 'object' ? parsed.flags : {};
+    let items = Array.isArray(parsed.items) ? parsed.items.filter((id): id is ItemId => ITEMS.has(id as ItemId)) : [];
+    // After the sale, the ledger is on the desk and the pencil is on the counter, even in an older save.
+    if (flags.ledgerWritten) items = items.filter((id) => id !== 'pencil' && id !== 'ledger');
     const cases: Cases = {
       bookshop: true,
       lantern: parsed.cases?.lantern === true || flags.seenEnding === true,
@@ -105,7 +108,7 @@ export function loadSave(): Save {
       x: parsed.x,
       y: parsed.y,
       face: parsed.face === 1 ? 1 : -1,
-      items: Array.isArray(parsed.items) ? parsed.items.filter((id): id is ItemId => ITEMS.has(id as ItemId)) : [],
+      items,
       flags,
       learnedTap: parsed.learnedTap === true,
       name: cleanName(typeof parsed.name === 'string' ? parsed.name : DEFAULT_PROFILE.name),

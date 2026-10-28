@@ -56,6 +56,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image('prop-book', asset('prop-book.png'));
     this.load.image('prop-matches', asset('prop-matches.png'));
     this.load.image('prop-ledger', asset('prop-ledger.png'));
+    this.load.image('prop-ledger-written', asset('prop-ledger-written.png'));
     this.load.image('prop-pencil', asset('prop-pencil.png'));
     this.load.image('prop-letter', asset('prop-letter.png'));
     this.load.image('trophy-medal', asset('trophy-medal.png'));
