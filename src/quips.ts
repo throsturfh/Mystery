@@ -10,7 +10,7 @@ const LOOKS: Record<string, string[]> = {
   lamp: [
     'A green lamp. It makes the paperwork look more important than it is.',
     'The shade is the colour of a secret that has agreed to be filed.',
-    'Moths would come, if moths had clearance.',
+    'It hums when the room is thinking.',
   ],
   edith: [
     'Edith Crane. Dispatch, tea, and a filing system that frightens the dead.',

@@ -4,18 +4,16 @@ import { HUD_TOP, SHOW_SPOTS, SPEAKER_COLOR, SPEAKER_NAME, W } from '../config';
 import { hideCreatorField } from '../creatorDom';
 import { closestPoint, hitEllipse } from '../geom';
 import { lookLine } from '../quips';
-import type { Profile, Tone } from '../profile';
-import { MOTH_TOTAL, clearSave, ITEM_NAME, journalEntries, loadSave, starsFor, writeSave, type ItemId, type RoomId, type Save, type Speaker } from '../save';
+import type { Profile } from '../profile';
+import { clearSave, ITEM_NAME, journalEntries, loadSave, starsFor, writeSave, type ItemId, type RoomId, type Save, type Speaker } from '../save';
 import { buzz, loadSettings } from '../settings';
 import {
-  MOTHS,
   combine,
   ENTRY,
   ghostShouldShow,
   hintFor,
   onEnter,
   perform,
-  PROP_AT,
   spotsFor,
   useItemOn,
   walkFor,
@@ -25,7 +23,7 @@ import {
 } from '../story';
 import { idleKey, paintHero, walkKey } from '../tint';
 
-type Mode = 'play' | 'speech' | 'choice' | 'fade' | 'card' | 'journal';
+type Mode = 'play' | 'speech' | 'choice' | 'fade' | 'card' | 'journal' | 'menu' | 'confirm';
 
 const FONT = 'Cormorant Garamond, Georgia, serif';
 const DISPLAY = 'Cinzel, Georgia, serif';
@@ -71,16 +69,14 @@ export class AdventureScene extends Phaser.Scene {
   private caption!: Phaser.GameObjects.Text;
   private lookText!: Phaser.GameObjects.Text;
   private hintText!: Phaser.GameObjects.Text;
-  private resetText!: Phaser.GameObjects.Text;
   private plaque!: Phaser.GameObjects.Text;
   private lane!: Phaser.GameObjects.Text;
   private envelope?: Phaser.GameObjects.Image;
-  private resetArm = false;
+  private cursorIcon!: Phaser.GameObjects.Image;
   private line: string | null = null;
   private ctx!: Ctx;
   private scenery: { img: Phaser.GameObjects.Image; show: () => boolean }[] = [];
   private june?: Phaser.GameObjects.Image;
-  private moths: { id: string; img: Phaser.GameObjects.Image; baseY: number }[] = [];
   private spiritLabel!: Phaser.GameObjects.Text;
   private stride = 0;
   private walkFrame = 0;
@@ -98,6 +94,22 @@ export class AdventureScene extends Phaser.Scene {
 
   create(): void {
     hideCreatorField();
+    this.slotImgs = [];
+    this.props = [];
+    this.scenery = [];
+    this.speechObjs = [];
+    this.choiceObjs = [];
+    this.choiceHits = [];
+    this.overlay = [];
+    this.motes = [];
+    this.spots = [];
+    this.june = undefined;
+    this.ghost = undefined;
+    this.envelope = undefined;
+    this.selected = null;
+    this.lookMode = false;
+    this.walking = false;
+    this.goal = null;
     this.save = loadSave();
     this.fx = this.save.x;
     this.fy = this.save.y;
@@ -120,7 +132,6 @@ export class AdventureScene extends Phaser.Scene {
       .setResolution(2);
     this.lookText = this.makeButtonLabel('');
     this.hintText = this.makeButtonLabel('Hint');
-    this.resetText = this.makeButtonLabel('Reset');
     this.plaque = this.add
       .text(W / 2, 36, 'Case closed', {
         fontFamily: DISPLAY,
@@ -146,10 +157,11 @@ export class AdventureScene extends Phaser.Scene {
       .setDepth(1800)
       .setVisible(false)
       .setResolution(2);
-    this.dragIcon = this.add.image(0, 0, 'icon-lantern').setDepth(2300).setVisible(false).setScale(0.9);
+    this.dragIcon = this.add.image(0, 0, 'icon-lantern').setDepth(2300).setVisible(false).setDisplaySize(42, 42);
+    this.cursorIcon = this.add.image(0, 0, 'icon-lantern').setDepth(2350).setVisible(false).setDisplaySize(40, 40);
     this.fog = this.add.graphics().setDepth(460);
-    for (let i = 0; i < 14; i++) {
-      this.motes.push({ x: Math.random() * 1280, y: 180 + Math.random() * 400, vx: 8 + Math.random() * 14, a: 0.04 + Math.random() * 0.08, r: 18 + Math.random() * 40 });
+    for (let i = 0; i < 10; i++) {
+      this.motes.push({ x: Math.random() * 1400 - 60, y: 548 + Math.random() * 62, vx: 10 + Math.random() * 16, a: 0.05 + Math.random() * 0.06, r: 28 + Math.random() * 36 });
     }
     this.tag = this.add.text(0, 0, '', {
       fontFamily: FONT,
@@ -227,11 +239,9 @@ export class AdventureScene extends Phaser.Scene {
     }
     this.drawFog(dt);
     this.drawHero(dt);
-    for (const moth of this.moths) {
-      if (!moth.img.active) continue;
-      moth.img.y = moth.baseY + Math.sin(this.time.now / 280 + moth.baseY) * 4;
-      moth.img.setAngle(Math.sin(this.time.now / 160 + moth.baseY) * 8);
-    }
+    const talking = this.mode === 'speech' || this.mode === 'choice' || this.mode === 'card' || this.mode === 'menu' || this.mode === 'confirm';
+    this.plaque.setVisible(this.save.room === 'office' && this.save.flags.seenEnding === true && !talking);
+    this.lane.setVisible(this.save.room === 'office' && this.save.flags.seenEnding === true && !talking);
     if (this.ghost?.active) {
       this.ghost.y = this.ghostBaseY + Math.sin(this.time.now / 420) * 7;
     }
@@ -277,6 +287,13 @@ export class AdventureScene extends Phaser.Scene {
         if (name === 'ok') buzz([12, 18, 12]);
       },
       face: (who) => this.faceNpc(who),
+      handoff: () => this.handoffKey(),
+      openMap: async () => {
+        this.persist();
+        this.time.delayedCall(40, () => {
+          if (this.scene.isActive()) this.scene.start('map');
+        });
+      },
       card: () => this.showCard(),
     };
   }
@@ -387,7 +404,6 @@ export class AdventureScene extends Phaser.Scene {
     }
     this.placeScenery();
     this.placeSpirit();
-    this.placeMoths();
     this.spots = spotsFor(this.save, room);
     this.syncGhost();
     this.ensureEndingDressing();
@@ -399,7 +415,7 @@ export class AdventureScene extends Phaser.Scene {
     this.plaque.setVisible(show);
     this.lane.setVisible(show);
     if (show && !this.envelope) {
-      this.envelope = this.add.image(1000, 360, 'envelope').setDepth(30).setScale(1);
+      this.envelope = this.add.image(1008, 448, 'prop-letter').setDepth(30).setScale(0.4);
     }
     if (!show && this.envelope) {
       this.envelope.destroy();
@@ -453,17 +469,13 @@ export class AdventureScene extends Phaser.Scene {
     this.props = [];
     this.scenery = [];
     this.june = undefined;
-    this.moths = [];
   }
 
   private placeTrophies(): void {
     const f = this.save.flags;
-    const any = f.seenEnding || f.bookShelved || f.gotKey || this.save.moths.length > 0;
-    if (!any) return;
-    if (f.gotKey) this.addScenery('shelf-key', 868, 214, 0.5, 1, 22, () => true, 0.48);
-    if (f.seenEnding) this.addScenery('medal', 918, 210, 0.5, 1, 22, () => true, 1.05);
-    if (this.save.moths.length > 0) this.addScenery('jar', 968, 214, 0.5, 1, 22, () => true, 1.05);
-    if (f.bookShelved) this.addScenery('shelf-book', 1018, 214, 0.5, 1, 22, () => true, 0.42);
+    if (f.gotKey) this.addScenery('icon-key', 900, 232, 0.5, 0.92, 27, () => true, 0.34);
+    if (f.bookShelved) this.addScenery('prop-book', 930, 236, 0.5, 0.96, 26, () => true, 0.1);
+    if (f.seenEnding) this.addScenery('trophy-medal', 948, 234, 0.5, 0.94, 26, () => true, 0.1);
   }
 
   private placeSpirit(): void {
@@ -484,17 +496,6 @@ export class AdventureScene extends Phaser.Scene {
       marks.fillEllipse(x + 26, 576, 18, 7);
     }
     this.props.push(veil, marks);
-  }
-
-  private placeMoths(): void {
-    this.moths = [];
-    for (const spec of MOTHS) {
-      if (spec.room !== this.save.room || this.save.moths.includes(spec.id)) continue;
-      const visible = !spec.hidden || this.save.spirit;
-      const img = this.add.image(spec.x, spec.y, 'moth').setDepth(85).setScale(1.35).setVisible(visible);
-      this.props.push(img);
-      this.moths.push({ id: spec.id, img, baseY: spec.y });
-    }
   }
 
   private ghostBurst(x: number, y: number): void {
@@ -543,7 +544,7 @@ export class AdventureScene extends Phaser.Scene {
   }
 
   private npcLayout(who: 'edith' | 'june' | 'ambrose'): { x: number; y: number; half: number; spots: { x: number; y: number }[] } | null {
-    if (who === 'june') return { x: 620, y: 585, half: 90, spots: [{ x: 380, y: 578 }, { x: 860, y: 578 }] };
+    if (who === 'june') return { x: 620, y: 585, half: 160, spots: [{ x: 250, y: 586 }, { x: 990, y: 586 }] };
     if (who === 'edith') return { x: 1040, y: 568, half: 50, spots: [{ x: 760, y: 576 }, { x: 1120, y: 570 }] };
     const shop = this.save.room === 'shop';
     return {
@@ -580,18 +581,18 @@ export class AdventureScene extends Phaser.Scene {
     const has = (id: 'pencil' | 'matches' | 'book' | 'ledger') => this.save.items.includes(id);
     const f = this.save.flags;
     if (room === 'shop') {
-      this.addScenery('prop-book', PROP_AT.shelfBook.x, PROP_AT.shelfBook.y, 0.5, 0.5, 12, () => f.bookShelved === true, 0.9);
-      this.addScenery('prop-pencil', 905, 418, 0.5, 0.78, 12, () => !has('pencil') && f.ledgerWritten !== true, 0.58);
-      this.june = this.add.image(620, 585, 'june').setOrigin(0.5, 1).setScale(0.33).setDepth(500 + 585);
+      this.addScenery('prop-book', 478, 214, 0.5, 0.9, 16, () => f.bookShelved === true, 0.22);
+      this.addScenery('prop-pencil', 972, 372, 0.45, 0.82, 16, () => !has('pencil') && f.ledgerWritten !== true, 0.28);
+      this.june = this.add.image(620, 585, this.save.flags.gotKey ? 'june-nokeys' : 'june').setOrigin(0.5, 1).setScale(0.33).setDepth(500 + 585);
       this.props.push(this.june);
     }
     if (room === 'office') this.placeTrophies();
     if (room === 'nook') {
-      this.addScenery('prop-match-cover', 158, 440, 0, 0, 14, () => has('matches') || f.lanternLit === true);
-      this.addScenery('prop-book', PROP_AT.book.x, PROP_AT.book.y, 0, 0, 12, () => !has('book') && f.bookShelved !== true);
+      this.addScenery('prop-matches', 186, 448, 0.5, 0.85, 16, () => !has('matches') && f.lanternLit !== true, 0.26);
+      this.addScenery('prop-book', 430, 342, 0.5, 1, 16, () => !has('book') && f.bookShelved !== true, 0.22);
     }
     if (room === 'stock' && f.lanternLit === true) {
-      this.addScenery('prop-ledger', PROP_AT.ledger.x, PROP_AT.ledger.y, 0, 0, 12, () => !has('ledger') && f.ledgerWritten !== true);
+      this.addScenery('prop-ledger', 1048, 458, 0.5, 0.86, 16, () => !has('ledger') && f.ledgerWritten !== true, 0.28);
     }
   }
 
@@ -690,6 +691,8 @@ export class AdventureScene extends Phaser.Scene {
   private renderSpeech(who: Speaker, text: string, waitTap: boolean): void {
     this.clearSpeech();
     this.tag.setVisible(false);
+    this.plaque.setVisible(false);
+    this.lane.setVisible(false);
     this.line = text;
     const speaker = who === 'detective' ? this.save.name || 'Detective' : SPEAKER_NAME[who];
     audio.blip(who === 'ambrose' ? 680 : who === 'edith' ? 490 : who === 'june' ? 560 : 610, 0.07, 0.028);
@@ -821,19 +824,21 @@ export class AdventureScene extends Phaser.Scene {
       const c = this.slotCenter(index);
       const hot = this.selected === id;
       g.fillStyle(hot ? 0x5c4324 : 0x1a120c, 1);
-      g.fillRoundedRect(c.x - 34, c.y - 34, 68, 68, 8);
-      g.lineStyle(2, hot ? 0xf0d59a : 0x8a6430, 1);
-      g.strokeRoundedRect(c.x - 34, c.y - 34, 68, 68, 8);
+      g.fillRoundedRect(c.x - 34, c.y - 34 - (hot ? 6 : 0), 68, 68, 8);
+      g.lineStyle(hot ? 4 : 2, hot ? 0xf0d59a : 0x8a6430, 1);
+      g.strokeRoundedRect(c.x - 34, c.y - 34 - (hot ? 6 : 0), 68, 68, 8);
+      if (hot) {
+        g.lineStyle(2, 0xffe7a8, 0.8);
+        g.strokeRoundedRect(c.x - 38, c.y - 44, 76, 76, 10);
+      }
     });
-    drawBtn(748, 640, 90, 64, this.resetArm);
     drawBtn(848, 640, 140, 64, this.lookMode);
     drawBtn(1000, 640, 256, 64, false);
     this.layoutSlots();
     this.lookText.setPosition(918, 672).setText('Look');
     this.hintText.setPosition(1128, 672);
-    this.resetText.setPosition(793, 672).setText(this.resetArm ? 'Again?' : 'Reset');
     const selectedName = this.selected ? ITEM_NAME[this.selected] : '';
-    this.caption.setText(this.lookMode ? 'Next tap looks.' : selectedName || 'Tap the floor to walk.');
+    this.caption.setText(this.lookMode ? 'Next tap looks.' : this.selected ? `Using: ${selectedName}` : 'Tap the floor to walk.');
   }
 
   private layoutSlots(): void {
@@ -849,7 +854,8 @@ export class AdventureScene extends Phaser.Scene {
       }
       const c = this.slotCenter(index);
       const key = id === 'lantern' && this.save.flags.lanternLit ? 'icon-lantern-lit' : id === 'book' ? 'icon-greenbook' : `icon-${id}`;
-      img.setTexture(key).setPosition(c.x, c.y).setVisible(true).setScale(1);
+      const lifted = this.selected === id;
+      img.setTexture(key).setPosition(c.x, c.y - (lifted ? 8 : 0)).setVisible(true).setDisplaySize(48, 48);
     });
   }
 
@@ -927,14 +933,20 @@ export class AdventureScene extends Phaser.Scene {
     if (this.dragItem) {
       const key = this.dragItem === 'lantern' && this.save.flags.lanternLit ? 'icon-lantern-lit' : this.dragItem === 'book' ? 'icon-greenbook' : `icon-${this.dragItem}`;
       this.dragIcon.setTexture(key).setPosition(w.x, w.y).setVisible(true);
+      this.cursorIcon.setVisible(false);
+    } else if (this.selected && this.mode === 'play') {
+      const key = this.selected === 'lantern' && this.save.flags.lanternLit ? 'icon-lantern-lit' : this.selected === 'book' ? 'icon-greenbook' : `icon-${this.selected}`;
+      this.cursorIcon.setTexture(key).setPosition(w.x, w.y - 28).setVisible(true).setDisplaySize(40, 40);
+      this.dragIcon.setVisible(false);
     } else {
       this.dragIcon.setVisible(false);
+      this.cursorIcon.setVisible(false);
     }
     if (this.mode === 'play' && !this.busyScript) {
       const spot = this.hitSpot(w.x, w.y);
       this.showTag(spot);
       if (this.lookMode) this.caption.setText(spot ? `Look at ${spot.name}` : 'Next tap looks.');
-      else if (this.selected) this.caption.setText(spot ? `Use ${ITEM_NAME[this.selected]} on ${spot.name}` : ITEM_NAME[this.selected]);
+      else if (this.selected) this.caption.setText(spot ? `Use ${ITEM_NAME[this.selected]} on ${spot.name}` : `Using: ${ITEM_NAME[this.selected]}`);
       else if (spot) this.caption.setText(verbLine(spot.verb, spot.name));
       else if (!this.pointerDown) this.caption.setText('Tap the floor to walk.');
     }
@@ -970,9 +982,38 @@ export class AdventureScene extends Phaser.Scene {
       go?.();
       return;
     }
-    if (this.mode === 'journal') {
-      this.clearOverlay();
-      this.mode = 'play';
+    if (this.mode === 'journal' || this.mode === 'menu') {
+      if (this.mode === 'menu') {
+        if (this.hitRect(w.x, w.y, 390, 250, 500, 56)) {
+          this.clearOverlay();
+          this.mode = 'play';
+          return;
+        }
+        if (this.hitRect(w.x, w.y, 390, 322, 500, 56)) {
+          this.clearOverlay();
+          this.openConfirm();
+          return;
+        }
+        if (this.hitRect(w.x, w.y, 390, 394, 500, 56)) {
+          this.clearOverlay();
+          this.persist();
+          this.scene.start('title');
+          return;
+        }
+      } else {
+        this.clearOverlay();
+        this.mode = 'play';
+      }
+      return;
+    }
+    if (this.mode === 'confirm') {
+      if (this.hitRect(w.x, w.y, 390, 340, 230, 56)) {
+        clearSave();
+        window.location.reload();
+      } else if (this.hitRect(w.x, w.y, 640, 340, 230, 56)) {
+        this.clearOverlay();
+        this.openMenu();
+      }
       return;
     }
     if (this.mode === 'choice') {
@@ -1003,22 +1044,12 @@ export class AdventureScene extends Phaser.Scene {
       this.persist();
       return;
     }
-    const moth = this.moths.find((entry) => entry.img.visible && Math.hypot(entry.img.x - w.x, entry.img.y - w.y) < 34);
-    if (moth) {
-      void this.collectMoth(moth.id, moth.img.x, moth.img.y);
-      return;
-    }
     if (w.y < 48 && w.x < 96) {
-      this.persist();
-      this.scene.start('title');
+      this.openMenu();
       return;
     }
     if (w.y < 48 && w.x >= 110 && w.x < 230) {
       this.openJournal();
-      return;
-    }
-    if (this.hitRect(w.x, w.y, 748, 640, 90, 64)) {
-      this.onReset();
       return;
     }
     if (this.hitRect(w.x, w.y, 1000, 640, 256, 64)) {
@@ -1079,41 +1110,95 @@ export class AdventureScene extends Phaser.Scene {
     void this.guard(() => this.walkTo(w.x, w.y).then(() => undefined));
   }
 
-  private async collectMoth(id: string, x: number, y: number): Promise<void> {
-    await this.guard(async () => {
-      if (this.save.moths.includes(id)) return;
-      this.save.moths.push(id);
-      audio.play('moth', (x - 640) / 640);
-      buzz([14, 24, 14]);
-      const img = this.moths.find((entry) => entry.id === id)?.img;
-      if (img) this.tweens.add({ targets: img, y: y - 40, alpha: 0, angle: 24, duration: 420, onComplete: () => img.destroy() });
-      if (this.save.moths.length >= MOTH_TOTAL && !this.save.flags.mothCrown) {
-        this.save.flags.mothCrown = true;
-        const tone: Tone = this.save.tone;
-        const line =
-          tone === 'warm'
-            ? 'Every moth. They were never lost. They were waiting to be noticed.'
-            : tone === 'dramatic'
-              ? 'The last moth settles. The jar on the shelf will remember this night.'
-              : 'That was the last moth. Edith will pretend the jar was her idea.';
-        await this.say('detective', line);
-      }
-      this.persist();
-    });
+  private openMenu(): void {
+    this.clearOverlay();
+    this.mode = 'menu';
+    this.cursorIcon.setVisible(false);
+    const g = this.add.graphics().setDepth(2600);
+    g.fillStyle(0x140e0a, 0.72);
+    g.fillRect(0, 0, 1280, 720);
+    g.fillStyle(0x24180f, 0.96);
+    g.fillRoundedRect(360, 160, 560, 340, 16);
+    g.lineStyle(3, 0xc6a15a, 1);
+    g.strokeRoundedRect(360, 160, 560, 340, 16);
+    this.overlay.push(g);
+    const title = this.add.text(640, 200, 'Menu', { fontFamily: DISPLAY, fontSize: '36px', color: '#e6c98a' }).setOrigin(0.5).setDepth(2601).setResolution(2);
+    this.overlay.push(title, this.menuButton(390, 250, 'Resume'), this.menuButton(390, 322, 'Reset case'), this.menuButton(390, 394, 'Title screen'));
   }
 
-  private onReset(): void {
-    if (!this.resetArm) {
-      this.resetArm = true;
-      this.time.delayedCall(3500, () => {
-        this.resetArm = false;
-        this.redrawHud();
+  private openConfirm(): void {
+    this.clearOverlay();
+    this.mode = 'confirm';
+    const g = this.add.graphics().setDepth(2600);
+    g.fillStyle(0x140e0a, 0.78);
+    g.fillRect(0, 0, 1280, 720);
+    g.fillStyle(0x24180f, 0.98);
+    g.fillRoundedRect(340, 200, 600, 240, 16);
+    g.lineStyle(3, 0xc6a15a, 1);
+    g.strokeRoundedRect(340, 200, 600, 240, 16);
+    this.overlay.push(g);
+    const title = this.add.text(640, 250, 'Start the case over?', { fontFamily: DISPLAY, fontSize: '32px', color: '#e6c98a' }).setOrigin(0.5).setDepth(2601).setResolution(2);
+    const note = this.add.text(640, 300, 'This clears the Bellweather file.', { fontFamily: FONT, fontStyle: 'italic', fontSize: '22px', color: '#f3e6c8' }).setOrigin(0.5).setDepth(2601).setResolution(2);
+    this.overlay.push(title, note, this.menuButton(390, 340, 'Reset', 230), this.menuButton(640, 340, 'Cancel', 230));
+  }
+
+  private menuButton(x: number, y: number, label: string, w = 500): Phaser.GameObjects.Text {
+    const g = this.add.graphics().setDepth(2601);
+    g.fillStyle(0x3a2618, 1);
+    g.fillRoundedRect(x, y, w, 56, 8);
+    g.lineStyle(2, 0xc6a15a, 1);
+    g.strokeRoundedRect(x, y, w, 56, 8);
+    this.overlay.push(g);
+    return this.add.text(x + w / 2, y + 28, label, { fontFamily: DISPLAY, fontSize: '22px', color: '#f6edd6' }).setOrigin(0.5).setDepth(2602).setResolution(2);
+  }
+
+  private handoffKey(): Promise<void> {
+    return new Promise((resolve) => {
+      this.clearSpeech();
+      const june = this.june;
+      const toward = this.fx < (june?.x ?? 620) ? -1 : 1;
+      const from = june?.active ? { x: june.x + toward * 78, y: june.y - 250 } : { x: 640, y: 380 };
+      if (june?.active) june.setTexture('june-nokeys');
+      if (june?.active) {
+        this.tweens.add({
+          targets: june,
+          x: june.x + toward * 28,
+          duration: 280,
+          yoyo: true,
+        });
+      }
+      this.pose = 'pick';
+      this.poseUntil = this.time.now + 980;
+      const key = this.add.image(from.x, from.y, 'icon-key').setDepth(1400).setDisplaySize(64, 64);
+      const hand = { x: this.fx + this.face * 36, y: this.fy - 168 };
+      this.tweens.add({
+        targets: key,
+        x: hand.x,
+        y: hand.y,
+        duration: 420,
+        ease: 'Sine.easeOut',
+        onComplete: () => {
+          const slot = this.slotCenter(this.save.items.length);
+          this.tweens.add({
+            targets: key,
+            x: slot.x,
+            y: slot.y,
+            displayWidth: 28,
+            displayHeight: 28,
+            duration: 560,
+            ease: 'Cubic.easeIn',
+            onComplete: () => {
+              key.destroy();
+              if (!this.save.items.includes('key')) this.save.items.push('key');
+              this.save.flags.gotKey = true;
+              audio.play('pickup');
+              this.redrawHud();
+              resolve();
+            },
+          });
+        },
       });
-      this.redrawHud();
-      return;
-    }
-    clearSave();
-    window.location.reload();
+    });
   }
 
   private async onSpot(spot: Spot): Promise<void> {
@@ -1226,13 +1311,7 @@ export class AdventureScene extends Phaser.Scene {
         fontSize: '24px',
         color: '#f3e6c8',
       }).setOrigin(0.5).setDepth(2501).setResolution(2),
-      this.add.text(640, 360, `Ghost moths ${this.save.moths.length} / ${MOTH_TOTAL}${this.save.flags.mothCrown ? '. The jar is full.' : '.'}`, {
-        fontFamily: FONT,
-        fontStyle: 'italic',
-        fontSize: '22px',
-        color: '#d7efe4',
-      }).setOrigin(0.5).setDepth(2501).setResolution(2),
-      this.add.text(640, 410, 'To be continued', { fontFamily: DISPLAY, fontSize: '28px', color: '#f6edd6' }).setOrigin(0.5).setDepth(2501).setResolution(2),
+      this.add.text(640, 390, 'To be continued', { fontFamily: DISPLAY, fontSize: '28px', color: '#f6edd6' }).setOrigin(0.5).setDepth(2501).setResolution(2),
       this.add.text(640, 440, 'No. 9 Lantern Lane', { fontFamily: FONT, fontStyle: 'italic', fontSize: '32px', color: '#e6c98a' }).setOrigin(0.5).setDepth(2501).setResolution(2),
       this.add.text(640, 510, 'Tap to close the file', { fontFamily: DISPLAY, fontSize: '16px', color: '#c6a15a' }).setOrigin(0.5).setDepth(2501).setResolution(2),
     ];
@@ -1251,12 +1330,13 @@ export class AdventureScene extends Phaser.Scene {
     const g = this.fog;
     if (!g) return;
     g.clear();
-    const thick = this.save.room === 'stock' ? 1 : this.save.room === 'shop' || this.save.room === 'nook' ? 0.45 : 0.2;
+    const thick = this.save.room === 'stock' ? 0.7 : 0.45;
     for (const mote of this.motes) {
       mote.x += mote.vx * dt;
-      if (mote.x > 1320) mote.x = -40;
-      g.fillStyle(0xd7e4ea, mote.a * thick);
-      g.fillEllipse(mote.x, mote.y, mote.r * 3.2, mote.r);
+      if (mote.x > 1360) mote.x = -80;
+      mote.y = Math.min(612, Math.max(548, mote.y));
+      g.fillStyle(0xc5d0c8, mote.a * thick);
+      g.fillEllipse(mote.x, mote.y, mote.r * 4.2, 14);
     }
   }
 
@@ -1286,7 +1366,6 @@ export class AdventureScene extends Phaser.Scene {
       envelope: this.save.flags.seenEnding === true,
       nameField: document.getElementById('creator-name')?.classList.contains('show') === true,
       spirit: this.save.spirit,
-      moths: this.save.moths.length,
       tone: this.save.tone,
       june: this.june?.active ? { x: this.june.x, y: this.june.y, flip: this.june.flipX } : null,
     };
@@ -1313,6 +1392,7 @@ function verbLine(verb: Verb, name: string): string {
     case 'shelf':
       return `Use ${name}`;
     case 'exit':
+    case 'map':
       return `Walk to ${name}`;
     default:
       return name;

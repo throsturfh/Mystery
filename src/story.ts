@@ -15,7 +15,8 @@ export type Verb =
   | 'ledger'
   | 'stock'
   | 'shelf'
-  | 'exit';
+  | 'exit'
+  | 'map';
 
 export type Spot = {
   id: string;
@@ -55,26 +56,10 @@ export interface Ctx {
   quip(id: string, fallback: string): string;
   sfx(name: string, pan?: number): void;
   face(who: 'edith' | 'june' | 'ambrose'): Promise<void>;
+  handoff(): Promise<void>;
+  openMap(): Promise<void>;
   card(): Promise<void>;
 }
-
-export type MothSpec = { id: string; room: RoomId; x: number; y: number; hidden: boolean };
-
-/** Two or three a room. Hidden moths only show under the spirit lantern. None of them gate the case. */
-export const MOTHS: MothSpec[] = [
-  { id: 'office-lamp', room: 'office', x: 990, y: 250, hidden: false },
-  { id: 'office-rain', room: 'office', x: 300, y: 180, hidden: true },
-  { id: 'office-board', room: 'office', x: 640, y: 150, hidden: false },
-  { id: 'shop-bell', room: 'shop', x: 180, y: 130, hidden: false },
-  { id: 'shop-shelf', room: 'shop', x: 400, y: 160, hidden: true },
-  { id: 'shop-lamp', room: 'shop', x: 1100, y: 220, hidden: false },
-  { id: 'nook-moon', room: 'nook', x: 500, y: 140, hidden: true },
-  { id: 'nook-case', room: 'nook', x: 900, y: 180, hidden: false },
-  { id: 'nook-chair', room: 'nook', x: 280, y: 250, hidden: false },
-  { id: 'stock-web', room: 'stock', x: 560, y: 160, hidden: true },
-  { id: 'stock-moon', room: 'stock', x: 470, y: 90, hidden: false },
-  { id: 'stock-crate', room: 'stock', x: 640, y: 400, hidden: true },
-];
 
 function byTone(tone: Tone, lines: Record<Tone, string>): string {
   return lines[tone];
@@ -101,10 +86,11 @@ export const WALKS: Record<RoomId, Pt[]> = {
     { x: 100, y: 602 },
   ],
   stock: [
-    { x: 180, y: 540 },
-    { x: 1080, y: 540 },
-    { x: 1160, y: 602 },
-    { x: 110, y: 602 },
+    { x: 140, y: 575 },
+    { x: 760, y: 575 },
+    { x: 820, y: 612 },
+    { x: 1180, y: 616 },
+    { x: 90, y: 616 },
   ],
 };
 
@@ -178,17 +164,16 @@ function baseSpots(save: Save, room: RoomId): Spot[] {
       spot('chair', 'the rocking chair', 760, 400, 80, 70, 680, 578, 1, 'A rocking chair. It moves when the room is being honest.', 'look'),
       spot('window', 'the window', 440, 250, 100, 110, 440, 568, -1, 'Rain on the glass. The city is minding its own business, for once.', 'look'),
       spot('coat', 'the coat rack', 230, 370, 55, 120, 320, 575, -1, 'Spare coats. None of them have given notice.', 'look'),
-      spot('side-door', 'the side door', 1210, 310, 60, 150, 1060, 575, 1, 'A dark doorway. It leads out, which is the polite thing for a doorway to do.', 'exit', { to: 'shop', entry: 'door' }),
-      spot('office-door', 'the street', 95, 280, 75, 180, 250, 575, -1, 'The street door. Other people\'s problems live on the far side.', 'exit', { to: 'shop', entry: 'door' }),
-      ...(save.flags.gotKey ? [spot('trophy-key', 'the spare key', 868, 186, 20, 18, 800, 572, 1, 'June\'s spare, kept on the cabinet. It opens a room that is finished now.', 'look')] : []),
-      ...(save.flags.seenEnding ? [spot('trophy-medal', 'the medal', 918, 182, 20, 18, 860, 572, 1, 'A brass star for a shelved ghost. Edith hates how pleased she is.', 'look')] : []),
-      ...(save.moths.length > 0 ? [spot('trophy-jar', 'the moth jar', 968, 184, 20, 18, 920, 572, 1, 'Ghost moths, stopped for a moment in a jar. They were never the case. They were the kindness.', 'look')] : []),
-      ...(save.flags.bookShelved ? [spot('trophy-book', 'the spare copy', 1018, 178, 20, 22, 980, 572, 1, 'A second green book, or the memory of one. The shelf downstairs is the real one.', 'look')] : []),
+      spot('side-door', 'the side door', 1210, 310, 60, 150, 1060, 575, 1, 'A dark doorway. The street is that way.', 'map'),
+      spot('office-door', 'the street', 95, 280, 75, 180, 250, 575, -1, 'The street door. The district is drawn on the far side.', 'map'),
+      ...(save.flags.gotKey ? [spot('trophy-key', 'the spare key', 900, 220, 22, 16, 860, 572, 1, 'June\'s spare, resting on the cabinet books.', 'look')] : []),
+      ...(save.flags.bookShelved ? [spot('trophy-book', 'the spare copy', 930, 222, 22, 16, 900, 572, 1, 'A spare green book, sitting on the cabinet.', 'look')] : []),
+      ...(save.flags.seenEnding ? [spot('trophy-medal', 'the blue box', 948, 220, 24, 16, 940, 572, 1, 'A small blue box, shut. Edith has not said what is inside.', 'look')] : []),
     ];
   }
   if (room === 'shop') {
     return [
-      spot('pencil', 'the pencil', 900, 408, 46, 16, 900, 572, 1, f.ledgerWritten ? 'The pencil already suffered for literature.' : 'A chewed pencil on the counter. Someone was thinking, or fretting.', 'pencil'),
+      spot('pencil', 'the pencil', 972, 368, 40, 16, 900, 578, 1, f.ledgerWritten ? 'The pencil already suffered for literature.' : 'A chewed pencil lying on the daybook. Someone was thinking, or fretting.', 'pencil'),
       spot('doorbell', 'the doorbell', 130, 150, 28, 24, 250, 562, -1, 'The doorbell. It rings for empty pavements, which is rude even for brass.', 'look'),
       spot('register', 'the cash register', 820, 300, 70, 46, 780, 568, 1, 'The till. It has opinions about being dead, and they are unfavourable.', 'look'),
       spot('daybook', 'the daybook', 960, 338, 55, 22, 920, 568, 1, 'The shop daybook, open on nothing in particular. The real ledger is sulking elsewhere.', 'look'),
@@ -201,8 +186,8 @@ function baseSpots(save: Save, room: RoomId): Spot[] {
   }
   if (room === 'nook') {
     return [
-      spot('matches', 'the matches', 186, 450, 32, 16, 250, 578, -1, f.lanternLit ? 'The side table remembers a matchbox. The matchbox has moved on.' : 'A matchbox on the side table. The table has stopped expecting company.', 'matches'),
-      spot('book', 'the green book', 422, 318, 46, 20, 460, 575, -1, f.bookShelved ? 'The low shelf has lost its argument with the book.' : 'A slim green book. The Lantern and the Lock. It hates this shelf.', 'book'),
+      spot('matches', 'the matches', 186, 442, 28, 16, 250, 578, -1, f.lanternLit ? 'The side table remembers a matchbox. The matchbox has moved on.' : 'A matchbox on the side table. The table has stopped expecting company.', 'matches'),
+      spot('book', 'the green book', 430, 318, 40, 22, 460, 575, -1, f.bookShelved ? 'The low shelf has lost its argument with the book.' : 'A slim green book. The Lantern and the Lock. It hates this shelf.', 'book'),
       spot('nook-lamp', 'the lamp', 185, 200, 28, 44, 250, 568, -1, 'A wall lamp. It is trying very hard to be a ghost.', 'look'),
       spot('chair', 'the chair', 340, 400, 100, 90, 460, 580, -1, 'The armchair. Ambrose\'s shape is still in it, like a dent in the air.', 'look'),
       spot('round-window', 'the round window', 470, 200, 55, 50, 470, 565, -1, 'A round window. The rain has a favourite chair out there too.', 'look'),
@@ -218,7 +203,7 @@ function baseSpots(save: Save, room: RoomId): Spot[] {
     ];
   }
   return [
-    spot('ledger', 'the ledger', 1010, 416, 95, 22, 900, 572, 1, f.ledgerWritten ? 'The desk is clear. The last line has stopped fidgeting.' : "Ambrose's ledger, open on a half-finished sale.", 'ledger'),
+    spot('ledger', 'the ledger', 1048, 448, 64, 20, 900, 600, 1, f.ledgerWritten ? 'The desk is clear. The last line has stopped fidgeting.' : "Ambrose's ledger, open on a half-finished sale.", 'ledger'),
     spot('moon', 'the window', 470, 110, 40, 36, 470, 558, -1, 'A little window, and a moon that has not been introduced.', 'look'),
     spot('cobwebs', 'the shelves', 560, 280, 140, 120, 520, 568, 1, 'Shelves, cobwebs, and the feeling of being counted.', 'look'),
     spot('crates', 'the crates', 480, 450, 70, 40, 480, 578, -1, 'Crates. Something in them has already left, politely.', 'look'),
@@ -308,6 +293,13 @@ export async function perform(spot: Spot, ctx: Ctx): Promise<void> {
       return;
     case 'exit':
       await leave(ctx, spot);
+      return;
+    case 'map':
+      if (!ctx.flag('introDone')) {
+        await ctx.say('edith', 'I am not finished. I am rarely finished, but I am especially not finished.');
+        return;
+      }
+      await ctx.openMap();
       return;
     default:
       return;
@@ -486,10 +478,7 @@ async function talkJune(ctx: Ctx): Promise<void> {
   }
   await ctx.say('june', 'That\'s him. He hates a messy fiction section more than he hates being dead.');
   await ctx.say('june', 'Stockroom key. Don\'t rearrange him. He hates that more.');
-  ctx.add('key');
-  ctx.setFlag('gotKey', true);
-  ctx.pose('pick');
-  ctx.refresh();
+  await ctx.handoff();
 }
 
 export async function talkAmbrose(ctx: Ctx): Promise<void> {

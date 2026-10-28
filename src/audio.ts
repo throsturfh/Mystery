@@ -12,7 +12,6 @@ export type SfxName =
   | 'ghost'
   | 'blip'
   | 'closed'
-  | 'moth'
   | 'whisper'
   | 'lanternToggle';
 
@@ -70,11 +69,7 @@ export class AudioBus {
       this.noise(0.22, 400, 0.1, panner);
       this.tone(320, 0.3, 'triangle', 0.04, panner);
     } else if (name === 'lanternToggle') this.tone(240, 0.08, 'square', 0.03, panner);
-    else if (name === 'moth') {
-      this.tone(880, 0.12, 'sine', 0.04, panner);
-      this.tone(1320, 0.08, 'triangle', 0.03, panner);
-      this.noise(0.1, 2400, 0.04, panner);
-    } else if (name === 'whisper') {
+    else if (name === 'whisper') {
       this.tone(420, 0.45, 'sine', 0.03, panner);
       this.noise(0.4, 700, 0.04, panner);
     } else if (name === 'ghost') this.chime([660, 990, 1320], 0.7, 0.05, panner);

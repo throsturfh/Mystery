@@ -1,8 +1,8 @@
 # Hollowmere Dispatch
 
-A landscape point-and-click mystery, version 0.12. You play a paranormal detective on **Case 0: The Bellweather Bookshop**. Edith Crane runs dispatch. June Bellweather keeps the shop. Ambrose, her grandfather, has not quite left.
+A landscape point-and-click mystery, version 0.13. You play a paranormal detective on **Case 0: The Bellweather Bookshop**. Edith Crane runs dispatch. June Bellweather keeps the shop. Ambrose, her grandfather, has not quite left.
 
-The detective is addressed by name. Coat, hat and scarf recolour from painted masks. A spirit lantern in the corner shows footprints, writing and shy moths, and is never required to finish the case. Ghosts flicker the lamps unless Reduce effects is on. Vibration uses the browser's vibrate API when the device allows it.
+The detective is addressed by name. Coat, hat and scarf are separate painted layers, one painting per colour. A spirit lantern in the corner shows footprints and writing, and is never required to finish the case. The office door opens a map of the district. Ghosts flicker the lamps unless Reduce effects is on. Vibration uses the browser's vibrate API when the device allows it.
 
 The rooms are side-view stages. Speech sits over the speaker's head. Portrait phones are asked to turn sideways.
 

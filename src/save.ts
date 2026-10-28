@@ -1,7 +1,6 @@
 import { cleanName, cleanTone, DEFAULT_PROFILE, type Tone } from './profile';
 
 export const SAVE_KEY = 'hollowmere-dispatch-v1';
-export const MOTH_TOTAL = 12;
 
 export type RoomId = 'office' | 'shop' | 'nook' | 'stock';
 export type ItemId = 'lantern' | 'matches' | 'key' | 'pencil' | 'ledger' | 'book';
@@ -13,12 +12,16 @@ export type Flag =
   | 'bookShelved'
   | 'ambroseBye'
   | 'seenEnding'
-  | 'gotKey'
-  | 'mothCrown';
+  | 'gotKey';
 export type Speaker = 'detective' | 'edith' | 'june' | 'ambrose';
 
+export type Cases = {
+  bookshop: boolean;
+  lantern: boolean;
+};
+
 export type Save = {
-  version: 6;
+  version: 7;
   started: boolean;
   room: RoomId;
   entry: string;
@@ -34,8 +37,8 @@ export type Save = {
   scarf: string;
   tone: Tone;
   hints: number;
-  moths: string[];
   spirit: boolean;
+  cases: Cases;
 };
 
 const ROOMS = new Set<RoomId>(['office', 'shop', 'nook', 'stock']);
@@ -52,7 +55,7 @@ export const ITEM_NAME: Record<ItemId, string> = {
 
 export function freshSave(): Save {
   return {
-    version: 6,
+    version: 7,
     started: false,
     room: 'office',
     entry: 'start',
@@ -68,8 +71,8 @@ export function freshSave(): Save {
     scarf: DEFAULT_PROFILE.scarf,
     tone: DEFAULT_PROFILE.tone,
     hints: 0,
-    moths: [],
     spirit: false,
+    cases: { bookshop: true, lantern: false },
   };
 }
 
@@ -77,13 +80,22 @@ export function loadSave(): Save {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return freshSave();
-    const parsed = JSON.parse(raw) as Partial<Omit<Save, 'version'>> & { version?: number; pronouns?: unknown };
-    if (!parsed || (parsed.version !== 5 && parsed.version !== 6)) return freshSave();
+    const parsed = JSON.parse(raw) as Partial<Omit<Save, 'version' | 'cases'>> & {
+      version?: number;
+      pronouns?: unknown;
+      moths?: unknown;
+      cases?: Partial<Cases>;
+    };
+    if (!parsed || (parsed.version !== 5 && parsed.version !== 6 && parsed.version !== 7)) return freshSave();
     if (!parsed.room || !ROOMS.has(parsed.room)) return freshSave();
     if (typeof parsed.x !== 'number' || typeof parsed.y !== 'number') return freshSave();
-    const moths = Array.isArray(parsed.moths) ? parsed.moths.filter((id): id is string => typeof id === 'string') : [];
+    const flags = parsed.flags && typeof parsed.flags === 'object' ? parsed.flags : {};
+    const cases: Cases = {
+      bookshop: true,
+      lantern: parsed.cases?.lantern === true || flags.seenEnding === true,
+    };
     return {
-      version: 6,
+      version: 7,
       started: parsed.started === true,
       room: parsed.room,
       entry: typeof parsed.entry === 'string' ? parsed.entry : 'start',
@@ -91,7 +103,7 @@ export function loadSave(): Save {
       y: parsed.y,
       face: parsed.face === 1 ? 1 : -1,
       items: Array.isArray(parsed.items) ? parsed.items.filter((id): id is ItemId => ITEMS.has(id as ItemId)) : [],
-      flags: parsed.flags && typeof parsed.flags === 'object' ? parsed.flags : {},
+      flags,
       learnedTap: parsed.learnedTap === true,
       name: cleanName(typeof parsed.name === 'string' ? parsed.name : DEFAULT_PROFILE.name),
       coat: typeof parsed.coat === 'string' ? parsed.coat : DEFAULT_PROFILE.coat,
@@ -99,8 +111,8 @@ export function loadSave(): Save {
       scarf: typeof parsed.scarf === 'string' ? parsed.scarf : DEFAULT_PROFILE.scarf,
       tone: cleanTone(parsed.tone),
       hints: typeof parsed.hints === 'number' ? parsed.hints : 0,
-      moths,
       spirit: parsed.spirit === true,
+      cases,
     };
   } catch {
     return freshSave();
@@ -112,7 +124,7 @@ export function hasContinue(): boolean {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return false;
     const parsed = JSON.parse(raw) as { version?: number; started?: boolean };
-    return (parsed.version === 5 || parsed.version === 6) && parsed.started === true;
+    return (parsed.version === 5 || parsed.version === 6 || parsed.version === 7) && parsed.started === true;
   } catch {
     return false;
   }
@@ -144,8 +156,7 @@ export function journalEntries(save: Save): { title: string; note: string }[] {
   if (save.flags.ambroseAsked || save.flags.bookShelved) notes.push({ title: 'What he wants', note: 'The green book belongs in the gap on the shop shelf, between the poets.' });
   if (save.flags.ambroseBye) notes.push({ title: 'Goodnight', note: 'Ambrose locked up. The doorbell was only him, checking June got home.' });
   if (save.flags.seenEnding) notes.push({ title: 'The envelope', note: `To be continued: No. 9 Lantern Lane. Filed under ${who}.` });
-  notes.push({ title: 'Ghost moths', note: `${save.moths.length} of ${MOTH_TOTAL}. ${save.moths.length >= MOTH_TOTAL ? 'The jar on the shelf is full. Edith pretends not to be delighted.' : 'Some only show when the spirit lantern is lit. None of them are required.'}` });
-  if (notes.length === 1) notes.unshift({ title: 'A blank page', note: 'Nothing worth ink yet. Edith would disagree, on principle.' });
+  if (notes.length === 0) notes.push({ title: 'A blank page', note: 'Nothing worth ink yet. Edith would disagree, on principle.' });
   return notes;
 }
 

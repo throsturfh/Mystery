@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { AdventureScene } from './AdventureScene';
+import { MapScene } from './MapScene';
+import { StreetScene } from './StreetScene';
 import { TitleScene } from './TitleScene';
 
 const asset = (file: string) => `${import.meta.env.BASE_URL}assets/${file}`;
@@ -16,13 +18,20 @@ export class BootScene extends Phaser.Scene {
     this.load.image('stock', asset('stock.jpg'));
     this.load.image('edith', asset('edith.jpg'));
     this.load.image('ambrose', asset('ambrose.png'));
-    this.load.image('detective', asset('detective.png'));
-    this.load.image('mask-detective', asset('masks/detective.png'));
-    for (let i = 0; i < 6; i++) {
-      this.load.image(`walk-${i}`, asset(`walk-${i}.png`));
-      this.load.image(`mask-walk-${i}`, asset(`masks/walk-${i}.png`));
-    }
+    this.load.image('map', asset('map.jpg'));
+    this.load.image('street', asset('street.jpg'));
     this.load.image('june', asset('june.png'));
+    this.load.image('june-nokeys', asset('june-nokeys.png'));
+    const frames = ['detective', 'walk-0', 'walk-1', 'walk-2', 'walk-3', 'walk-4', 'walk-5'];
+    const coats = ['tan', 'olive', 'charcoal', 'wine'];
+    const hats = ['brown', 'black', 'moss', 'plum'];
+    const scarves = ['plaid', 'pine', 'gold', 'ink'];
+    for (const frame of frames) {
+      this.load.image(`L-${frame}-base`, asset(`layers/${frame}-base.png`));
+      for (const id of coats) this.load.image(`L-${frame}-coat-${id}`, asset(`layers/${frame}-coat-${id}.png`));
+      for (const id of hats) this.load.image(`L-${frame}-hat-${id}`, asset(`layers/${frame}-hat-${id}.png`));
+      for (const id of scarves) this.load.image(`L-${frame}-scarf-${id}`, asset(`layers/${frame}-scarf-${id}.png`));
+    }
     for (const icon of ['lantern', 'lantern-lit', 'matches', 'key', 'pencil', 'ledger']) {
       this.load.image(`icon-${icon}`, asset(`icons/icon-${icon}.png`));
     }
@@ -31,49 +40,15 @@ export class BootScene extends Phaser.Scene {
     this.load.image('shelf-book', asset('icons/shelf-book.png'));
     this.load.image('prop-book', asset('prop-book.png'));
     this.load.image('prop-matches', asset('prop-matches.png'));
-    this.load.image('prop-match-cover', asset('prop-match-cover.png'));
     this.load.image('prop-ledger', asset('prop-ledger.png'));
     this.load.image('prop-pencil', asset('prop-pencil.png'));
+    this.load.image('prop-letter', asset('prop-letter.png'));
+    this.load.image('trophy-medal', asset('trophy-medal.png'));
   }
 
   create(): void {
-    this.paintMoth();
     this.paintBust();
-    this.paintEnvelope();
     this.scene.start('title');
-  }
-
-  private paintMoth(): void {
-    const g = this.add.graphics();
-    g.fillStyle(0x9fd8c8, 0.35);
-    g.fillCircle(40, 24, 22);
-    g.fillStyle(0xd7fff2, 0.95);
-    g.fillEllipse(18, 22, 28, 16);
-    g.fillEllipse(62, 22, 28, 16);
-    g.fillStyle(0xf4fff8, 0.8);
-    g.fillEllipse(16, 18, 16, 8);
-    g.fillEllipse(64, 18, 16, 8);
-    g.fillStyle(0x1c2820, 1);
-    g.fillEllipse(40, 24, 8, 18);
-    g.fillStyle(0xf3e6c8, 1);
-    g.fillCircle(38, 16, 2);
-    g.generateTexture('moth', 80, 48);
-    g.destroy();
-    const medal = this.add.graphics();
-    medal.fillStyle(0xe6c98a, 1);
-    medal.fillCircle(16, 16, 12);
-    medal.fillStyle(0x8a6430, 1);
-    medal.fillCircle(16, 16, 5);
-    medal.generateTexture('medal', 32, 32);
-    medal.destroy();
-    const jar = this.add.graphics();
-    jar.fillStyle(0x6a8f86, 0.9);
-    jar.fillRoundedRect(8, 10, 20, 22, 4);
-    jar.fillStyle(0xc9ebe0, 0.8);
-    jar.fillCircle(14, 16, 3);
-    jar.fillCircle(20, 20, 2);
-    jar.generateTexture('jar', 36, 36);
-    jar.destroy();
   }
 
   private paintBust(): void {
@@ -93,20 +68,6 @@ export class BootScene extends Phaser.Scene {
     this.textures.addCanvas('edith-bust', canvas);
   }
 
-  private paintEnvelope(): void {
-    const g = this.add.graphics();
-    g.fillStyle(0xf6edd6, 1);
-    g.fillRoundedRect(0, 8, 150, 96, 6);
-    g.lineStyle(3, 0x8a6430, 1);
-    g.strokeRoundedRect(0, 8, 150, 96, 6);
-    g.lineStyle(2, 0xc6a15a, 1);
-    g.lineBetween(4, 12, 75, 58);
-    g.lineBetween(146, 12, 75, 58);
-    g.fillStyle(0x9a2c2c, 1);
-    g.fillCircle(118, 36, 8);
-    g.generateTexture('envelope', 150, 110);
-    g.destroy();
-  }
 }
 
-export const scenes = [BootScene, TitleScene, AdventureScene];
+export const scenes = [BootScene, TitleScene, AdventureScene, MapScene, StreetScene];
