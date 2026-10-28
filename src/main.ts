@@ -5,6 +5,7 @@ import '@fontsource/cormorant-garamond/500.css';
 import '@fontsource/cormorant-garamond/600.css';
 import Phaser from 'phaser';
 import { H, W } from './config';
+import { bindDisplay } from './fullscreen';
 import { scenes } from './scenes/BootScene';
 import './style.css';
 
@@ -35,14 +36,7 @@ async function boot(): Promise<void> {
     document.fonts.ready,
   ]);
   await Promise.race([fonts, new Promise((resolve) => window.setTimeout(resolve, 2500))]);
-  new Phaser.Game(config);
-  const rotate = document.getElementById('rotate');
-  const syncRotate = () => {
-    if (!rotate) return;
-    rotate.classList.toggle('show', window.innerHeight > window.innerWidth);
-  };
-  syncRotate();
-  window.addEventListener('resize', syncRotate);
+  bindDisplay(new Phaser.Game(config));
 }
 
 void boot();
