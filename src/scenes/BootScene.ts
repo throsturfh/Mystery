@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { AdventureScene } from './AdventureScene';
+import { TitleScene } from './TitleScene';
 
 const asset = (file: string) => `${import.meta.env.BASE_URL}assets/${file}`;
 
@@ -16,10 +17,7 @@ export class BootScene extends Phaser.Scene {
     this.load.image('edith', asset('edith.jpg'));
     this.load.image('ambrose', asset('ambrose.png'));
     this.load.image('detective', asset('detective.png'));
-    this.load.image('detective-0', asset('detective-0.png'));
-    this.load.image('detective-1', asset('detective-1.png'));
-    this.load.image('detective-2', asset('detective-2.png'));
-    this.load.image('detective-3', asset('detective-3.png'));
+    for (let i = 0; i < 6; i++) this.load.image(`walk-${i}`, asset(`walk-${i}.png`));
     this.load.image('june', asset('june.png'));
     this.load.image('prop-book', asset('prop-book.png'));
     this.load.image('prop-matches', asset('prop-matches.png'));
@@ -32,7 +30,7 @@ export class BootScene extends Phaser.Scene {
     this.paintIcons();
     this.paintBust();
     this.paintEnvelope();
-    this.scene.start('adventure');
+    this.scene.start('title');
   }
 
   private paintIcons(): void {
@@ -144,4 +142,4 @@ export class BootScene extends Phaser.Scene {
   }
 }
 
-export const scenes = [BootScene, AdventureScene];
+export const scenes = [BootScene, TitleScene, AdventureScene];

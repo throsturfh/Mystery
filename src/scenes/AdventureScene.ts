@@ -1,11 +1,15 @@
 import Phaser from 'phaser';
-import { audio } from '../audio';
+import { audio, type SfxName } from '../audio';
 import { HUD_TOP, SHOW_SPOTS, SPEAKER_COLOR, SPEAKER_NAME, W } from '../config';
 import { closestPoint, hitEllipse } from '../geom';
+import { lookLine } from '../quips';
+import type { Profile } from '../profile';
 import {
   clearSave,
   ITEM_NAME,
+  journalEntries,
   loadSave,
+  starsFor,
   writeSave,
   type ItemId,
   type RoomId,
@@ -27,8 +31,9 @@ import {
   type Spot,
   type Verb,
 } from '../story';
+import { idleKey, paintHero, walkKey } from '../tint';
 
-type Mode = 'play' | 'speech' | 'choice' | 'fade';
+type Mode = 'play' | 'speech' | 'choice' | 'fade' | 'card' | 'journal';
 
 const FONT = 'Cormorant Garamond, Georgia, serif';
 const DISPLAY = 'Cinzel, Georgia, serif';
@@ -46,7 +51,6 @@ export class AdventureScene extends Phaser.Scene {
   private walking = false;
   private goal: { x: number; y: number } | null = null;
   private walkResolve: ((ok: boolean) => void) | null = null;
-  private bob = 0;
   private pose: 'none' | 'look' | 'pick' = 'none';
   private poseUntil = 0;
   private hero!: Phaser.GameObjects.Image;
@@ -84,6 +88,15 @@ export class AdventureScene extends Phaser.Scene {
   private ctx!: Ctx;
   private scenery: { img: Phaser.GameObjects.Image; show: () => boolean }[] = [];
   private june?: Phaser.GameObjects.Image;
+  private stride = 0;
+  private walkFrame = 0;
+  private lookCounts = new Map<string, number>();
+  private fog!: Phaser.GameObjects.Graphics;
+  private motes: { x: number; y: number; vx: number; a: number; r: number }[] = [];
+  private tag!: Phaser.GameObjects.Text;
+  private savedText!: Phaser.GameObjects.Text;
+  private cardResolve: (() => void) | null = null;
+  private overlay: Phaser.GameObjects.GameObject[] = [];
 
   constructor() {
     super('adventure');
@@ -94,6 +107,8 @@ export class AdventureScene extends Phaser.Scene {
     this.fx = this.save.x;
     this.fy = this.save.y;
     this.face = this.save.face;
+    paintHero(this, this.profile());
+    audio.ambient(this.save.room);
     this.ctx = this.makeCtx();
     this.shadow = this.add.ellipse(0, 0, 86, 18, 0x000000, 0.35).setDepth(90);
     this.hero = this.add.image(0, 0, 'detective').setOrigin(0.5, 1).setDepth(700);
@@ -137,6 +152,36 @@ export class AdventureScene extends Phaser.Scene {
       .setVisible(false)
       .setResolution(2);
     this.dragIcon = this.add.image(0, 0, 'icon-lantern').setDepth(2300).setVisible(false).setScale(0.9);
+    this.fog = this.add.graphics().setDepth(460);
+    for (let i = 0; i < 14; i++) {
+      this.motes.push({ x: Math.random() * 1280, y: 180 + Math.random() * 400, vx: 8 + Math.random() * 14, a: 0.04 + Math.random() * 0.08, r: 18 + Math.random() * 40 });
+    }
+    this.tag = this.add.text(0, 0, '', {
+      fontFamily: FONT,
+      fontSize: '20px',
+      color: '#f6edd6',
+      stroke: '#140e0a',
+      strokeThickness: 4,
+    }).setOrigin(0.5, 1).setDepth(1900).setVisible(false).setResolution(2);
+    this.savedText = this.add.text(640, 22, '', {
+      fontFamily: DISPLAY,
+      fontSize: '16px',
+      color: '#c6a15a',
+    }).setOrigin(0.5).setDepth(2300).setAlpha(0).setResolution(2);
+    this.add.text(28, 18, 'Menu', {
+      fontFamily: DISPLAY,
+      fontSize: '18px',
+      color: '#f6edd6',
+      stroke: '#140e0a',
+      strokeThickness: 4,
+    }).setDepth(2300).setResolution(2);
+    this.add.text(110, 18, 'Journal', {
+      fontFamily: DISPLAY,
+      fontSize: '18px',
+      color: '#f6edd6',
+      stroke: '#140e0a',
+      strokeThickness: 4,
+    }).setDepth(2300).setResolution(2);
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onDown(p));
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.onMove(p));
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => this.onUp(p));
@@ -158,7 +203,7 @@ export class AdventureScene extends Phaser.Scene {
       const dx = this.goal.x - this.fx;
       const dy = this.goal.y - this.fy;
       const dist = Math.hypot(dx, dy);
-      const step = 360 * dt;
+      const step = 240 * dt;
       if (dist <= step) {
         const face = Math.abs(dx) > 2 ? (dx < 0 ? -1 : 1) : this.face;
         this.place(this.goal.x, this.goal.y, face);
@@ -168,10 +213,17 @@ export class AdventureScene extends Phaser.Scene {
         this.walkResolve = null;
         done?.(true);
       } else {
-        this.bob += dt * 8;
+        this.stride += step;
+        const per = 16;
+        while (this.stride >= per) {
+          this.stride -= per;
+          this.walkFrame = (this.walkFrame + 1) % 6;
+          if (this.walkFrame % 3 === 0) audio.play('foot');
+        }
         this.place(this.fx + (dx / dist) * step, this.fy + (dy / dist) * step, dx < 0 ? -1 : 1);
       }
     }
+    this.drawFog(dt);
     this.drawHero(dt);
     if (this.ghost?.active) {
       this.ghost.y = this.ghostBaseY + Math.sin(this.time.now / 420) * 7;
@@ -205,6 +257,24 @@ export class AdventureScene extends Phaser.Scene {
       showGhost: (on) => this.showGhost(on),
       revealRoom: () => this.drawRoom(),
       wait: (ms) => new Promise((res) => this.time.delayedCall(ms, res)),
+      profile: () => this.profile(),
+      quip: (id, fallback) => {
+        const times = this.lookCounts.get(id) ?? 0;
+        this.lookCounts.set(id, times + 1);
+        return lookLine(id, fallback, times);
+      },
+      sfx: (name) => audio.play(name as SfxName),
+      card: () => this.showCard(),
+    };
+  }
+
+  private profile(): Profile {
+    return {
+      name: this.save.name,
+      pronouns: this.save.pronouns,
+      coat: this.save.coat,
+      hat: this.save.hat,
+      scarf: this.save.scarf,
     };
   }
 
@@ -255,6 +325,9 @@ export class AdventureScene extends Phaser.Scene {
     this.persist();
     await this.fade(true);
     this.mode = 'play';
+    audio.play('door');
+    if (room === 'shop') audio.play('bell');
+    audio.ambient(room);
     this.pendingEnter = true;
   }
 
@@ -339,6 +412,7 @@ export class AdventureScene extends Phaser.Scene {
   private showGhost(on: boolean): void {
     this.forceGhost = on;
     if (on) {
+      audio.play('ghost');
       this.syncGhost();
       return;
     }
@@ -381,7 +455,7 @@ export class AdventureScene extends Phaser.Scene {
     const has = (id: 'pencil' | 'matches' | 'book' | 'ledger') => this.save.items.includes(id);
     const f = this.save.flags;
     if (room === 'shop') {
-      this.addScenery('prop-pencil', 948, 362, 0.5, 0.5, 12, () => !has('pencil') && f.ledgerWritten !== true, 0.72);
+      this.addScenery('prop-pencil', 860, 400, 0.5, 0.5, 12, () => !has('pencil') && f.ledgerWritten !== true, 1);
       this.addScenery('prop-book', PROP_AT.shelfBook.x, PROP_AT.shelfBook.y, 0.5, 0.5, 12, () => f.bookShelved === true, 0.9);
       this.june = this.add.image(620, 585, 'june').setOrigin(0.5, 1).setScale(0.33).setDepth(500 + 540);
       this.props.push(this.june);
@@ -417,33 +491,29 @@ export class AdventureScene extends Phaser.Scene {
   }
 
   private drawHero(_dt: number): void {
-    const step = Math.sin(this.bob);
     const sc = this.scaleFor(this.fy);
     let sx = sc;
     let sy = sc;
     let angle = 0;
-    let yoff = Math.sin(this.time.now / 520) * 1.5;
+    let yoff = 0;
     const posing = this.time.now < this.poseUntil;
     if (!posing) this.pose = 'none';
+    const look = this.profile();
     if (this.walking && !posing) {
-      const frame = Math.abs(Math.floor(this.bob)) % 4;
-      const key = `detective-${frame}`;
+      const key = walkKey(look, this.walkFrame);
       if (this.hero.texture.key !== key) this.hero.setTexture(key);
-      sx *= 1 - step * 0.035;
-      sy *= 1 + step * 0.045;
-      angle = step * 2.2;
-      yoff = -Math.abs(step) * 7;
-    } else if (this.hero.texture.key !== 'detective') {
-      this.hero.setTexture('detective');
+    } else {
+      const key = idleKey(look);
+      if (this.hero.texture.key !== key) this.hero.setTexture(key);
+      yoff = Math.sin(this.time.now / 520) * 1.2;
     }
     if (posing && this.pose === 'look') {
-      sy *= 1.06;
-      angle += this.face < 0 ? 6 : -6;
+      sy *= 1.05;
+      angle += this.face < 0 ? 5 : -5;
     }
     if (posing && this.pose === 'pick') {
-      sx *= 1.12;
-      sy *= 0.88;
-      angle += this.face < 0 ? -7 : 7;
+      sx *= 1.08;
+      sy *= 0.92;
     }
     this.hero.setPosition(this.fx, this.fy + yoff);
     this.hero.setFlipX(this.face < 0);
@@ -764,11 +834,20 @@ export class AdventureScene extends Phaser.Scene {
     }
     if (this.mode === 'play' && !this.busyScript) {
       const spot = this.hitSpot(w.x, w.y);
+      this.showTag(spot);
       if (this.lookMode) this.caption.setText(spot ? `Look at ${spot.name}` : 'Next tap looks.');
       else if (this.selected) this.caption.setText(spot ? `Use ${ITEM_NAME[this.selected]} on ${spot.name}` : ITEM_NAME[this.selected]);
       else if (spot) this.caption.setText(verbLine(spot.verb, spot.name));
       else if (!this.pointerDown) this.caption.setText('Tap the floor to walk.');
     }
+  }
+
+  private showTag(spot: Spot | null): void {
+    if (!spot || spot.y < 36) {
+      this.tag.setVisible(false);
+      return;
+    }
+    this.tag.setText(spot.name).setPosition(spot.x, Math.max(28, spot.y - spot.ry - 8)).setVisible(true);
   }
 
   private onUp(p: Phaser.Input.Pointer): void {
@@ -781,6 +860,19 @@ export class AdventureScene extends Phaser.Scene {
     this.dragIcon.setVisible(false);
     if (this.longFired) return;
     if (this.mode === 'fade') return;
+    if (this.mode === 'card') {
+      this.clearOverlay();
+      this.mode = 'play';
+      const go = this.cardResolve;
+      this.cardResolve = null;
+      go?.();
+      return;
+    }
+    if (this.mode === 'journal') {
+      this.clearOverlay();
+      this.mode = 'play';
+      return;
+    }
     if (this.mode === 'choice') {
       const hit = this.choiceHits.find((box) => this.hitRect(w.x, w.y, box.x, box.y, box.w, box.h));
       if (hit && this.choiceResolve) {
@@ -801,11 +893,21 @@ export class AdventureScene extends Phaser.Scene {
       return;
     }
     if (this.busyScript) return;
+    if (w.y < 48 && w.x < 96) {
+      this.persist();
+      this.scene.start('title');
+      return;
+    }
+    if (w.y < 48 && w.x >= 110 && w.x < 230) {
+      this.openJournal();
+      return;
+    }
     if (this.hitRect(w.x, w.y, 748, 640, 90, 64)) {
       this.onReset();
       return;
     }
     if (this.hitRect(w.x, w.y, 1000, 640, 256, 64)) {
+      this.save.hints += 1;
       void this.guard(() => this.say('edith', hintFor(this.save)));
       return;
     }
@@ -921,6 +1023,89 @@ export class AdventureScene extends Phaser.Scene {
     this.save.y = this.fy;
     this.save.face = this.face;
     writeSave(this.save);
+    this.savedText.setText('Saved').setAlpha(1);
+    this.tweens.killTweensOf(this.savedText);
+    this.tweens.add({ targets: this.savedText, alpha: 0, delay: 700, duration: 500 });
+  }
+
+  private openJournal(): void {
+    this.clearOverlay();
+    this.mode = 'journal';
+    const g = this.add.graphics().setDepth(2400);
+    g.fillStyle(0x140e0a, 0.94);
+    g.fillRoundedRect(180, 70, 920, 500, 16);
+    g.lineStyle(3, 0xc6a15a, 1);
+    g.strokeRoundedRect(180, 70, 920, 500, 16);
+    this.overlay.push(g);
+    const title = this.add.text(640, 96, 'Journal', {
+      fontFamily: DISPLAY,
+      fontSize: '32px',
+      color: '#e6c98a',
+    }).setOrigin(0.5).setDepth(2401).setResolution(2);
+    this.overlay.push(title);
+    const notes = journalEntries(this.save).map((entry) => `${entry.title}. ${entry.note}`).join('\n\n');
+    const body = this.add.text(220, 150, notes, {
+      fontFamily: FONT,
+      fontSize: '24px',
+      color: '#f6edd6',
+      wordWrap: { width: 840 },
+    }).setDepth(2401).setResolution(2);
+    this.overlay.push(body);
+    const close = this.add.text(640, 530, 'Tap to close', {
+      fontFamily: DISPLAY,
+      fontSize: '18px',
+      color: '#c6a15a',
+    }).setOrigin(0.5).setDepth(2401).setResolution(2);
+    this.overlay.push(close);
+  }
+
+  private showCard(): Promise<void> {
+    this.clearOverlay();
+    this.mode = 'card';
+    const stars = starsFor(this.save.hints);
+    const g = this.add.graphics().setDepth(2500);
+    g.fillStyle(0x070504, 0.78);
+    g.fillRect(0, 0, 1280, 720);
+    g.fillStyle(0x24180f, 0.96);
+    g.fillRoundedRect(240, 140, 800, 420, 18);
+    g.lineStyle(3, 0xc6a15a, 1);
+    g.strokeRoundedRect(240, 140, 800, 420, 18);
+    this.overlay.push(g);
+    const lines = [
+      this.add.text(640, 190, 'Case closed', { fontFamily: DISPLAY, fontSize: '42px', color: '#e6c98a' }).setOrigin(0.5).setDepth(2501).setResolution(2),
+      this.add.text(640, 260, `${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}`, { fontFamily: DISPLAY, fontSize: '36px', color: '#f0d59a' }).setOrigin(0.5).setDepth(2501).setResolution(2),
+      this.add.text(640, 320, this.save.hints === 0 ? 'No hints. Edith is almost proud.' : `Hints taken: ${this.save.hints}.`, {
+        fontFamily: FONT,
+        fontStyle: 'italic',
+        fontSize: '24px',
+        color: '#f3e6c8',
+      }).setOrigin(0.5).setDepth(2501).setResolution(2),
+      this.add.text(640, 390, 'To be continued', { fontFamily: DISPLAY, fontSize: '28px', color: '#f6edd6' }).setOrigin(0.5).setDepth(2501).setResolution(2),
+      this.add.text(640, 440, 'No. 9 Lantern Lane', { fontFamily: FONT, fontStyle: 'italic', fontSize: '32px', color: '#e6c98a' }).setOrigin(0.5).setDepth(2501).setResolution(2),
+      this.add.text(640, 510, 'Tap to close the file', { fontFamily: DISPLAY, fontSize: '16px', color: '#c6a15a' }).setOrigin(0.5).setDepth(2501).setResolution(2),
+    ];
+    this.overlay.push(...lines);
+    return new Promise((resolve) => {
+      this.cardResolve = resolve;
+    });
+  }
+
+  private clearOverlay(): void {
+    for (const obj of this.overlay) obj.destroy();
+    this.overlay = [];
+  }
+
+  private drawFog(dt: number): void {
+    const g = this.fog;
+    if (!g) return;
+    g.clear();
+    const thick = this.save.room === 'stock' ? 1 : this.save.room === 'shop' || this.save.room === 'nook' ? 0.45 : 0.2;
+    for (const mote of this.motes) {
+      mote.x += mote.vx * dt;
+      if (mote.x > 1320) mote.x = -40;
+      g.fillStyle(0xd7e4ea, mote.a * thick);
+      g.fillEllipse(mote.x, mote.y, mote.r * 3.2, mote.r);
+    }
   }
 
   private publish(): void {

@@ -1,4 +1,6 @@
 import type { Pt } from './geom';
+import { grammar, type Profile } from './profile';
+import { pairLine, useLine } from './quips';
 import type { Flag, ItemId, RoomId, Save, Speaker } from './save';
 
 export type Verb =
@@ -48,6 +50,10 @@ export interface Ctx {
   showGhost(on: boolean): void;
   revealRoom(): void;
   wait(ms: number): Promise<void>;
+  profile(): Profile;
+  quip(id: string, fallback: string): string;
+  sfx(name: string): void;
+  card(): Promise<void>;
 }
 
 /** Open floor in front of the furniture. Back edge is the far boards, front edge sits just above the inventory. */
@@ -142,7 +148,7 @@ export function spotsFor(save: Save, room: RoomId): Spot[] {
   }
   if (room === 'shop') {
     return [
-      spot('pencil', 'the pencil', 948, 362, 48, 20, 900, 572, 1, f.ledgerWritten ? 'The pencil already suffered for literature.' : 'A pencil, left on the counter. Someone was thinking, or fretting.', 'pencil'),
+      spot('pencil', 'the pencil', 860, 400, 60, 22, 860, 572, 1, f.ledgerWritten ? 'The pencil already suffered for literature.' : 'A pencil on the counter. Someone was thinking, or fretting.', 'pencil'),
       spot('doorbell', 'the doorbell', 130, 150, 28, 24, 250, 562, -1, 'The doorbell. It rings for empty pavements, which is rude even for brass.', 'look'),
       spot('register', 'the cash register', 820, 300, 70, 46, 780, 568, 1, 'The till. It has opinions about being dead, and they are unfavourable.', 'look'),
       spot('daybook', 'the daybook', 960, 338, 55, 22, 920, 568, 1, 'The shop daybook, open on nothing in particular. The real ledger is sulking elsewhere.', 'look'),
@@ -230,7 +236,8 @@ export async function perform(spot: Spot, ctx: Ctx): Promise<void> {
     case 'look':
     case 'dark':
       ctx.pose('look');
-      await ctx.say('detective', spot.look);
+      if (spot.id === 'doorbell') ctx.sfx('bell');
+      await ctx.say('detective', ctx.quip(spot.id, spot.look));
       return;
     case 'edith':
       await talkEdith(ctx);
@@ -283,6 +290,7 @@ async function pick(ctx: Ctx, item: ItemId, line: string, gone: string): Promise
   }
   ctx.add(item);
   ctx.pose('pick');
+  ctx.sfx('pickup');
   ctx.refresh();
   await ctx.say('detective', line);
 }
@@ -321,21 +329,31 @@ export async function talkEdith(ctx: Ctx): Promise<void> {
 }
 
 async function intro(ctx: Ctx): Promise<void> {
-  await ctx.say('edith', 'Detective. The chair is only mostly haunted. Sit, or don\'t.');
+  const name = ctx.profile().name;
+  const g = grammar(ctx.profile().pronouns);
+  await ctx.say('edith', `${name}. The chair is only mostly haunted. Sit, or don't.`);
   await ctx.say('edith', 'Case zero. The Bellweather Bookshop. June inherited it from her grandfather, Ambrose.');
-  const choice = await ctx.ask(
-    'edith',
-    'The novels climb back onto the shelves overnight. At closing, the doorbell rings for an empty street.',
-    [
-      'A ghost with a catalogue. My favourite.',
-      'Could we simply ask him to stop?',
-      'What if he\'s a quiet customer?',
-      'I\'m in. Point me at the door.',
-    ],
-  );
+  let choice = 0;
+  for (;;) {
+    choice = await ctx.ask(
+      'edith',
+      'The novels climb back onto the shelves overnight. At closing, the doorbell rings for an empty street.',
+      [
+        'A ghost with a catalogue. My favourite.',
+        'May I taste the tea first?',
+        'What if he\'s a quiet customer?',
+        'I\'m in. Point me at the door.',
+      ],
+    );
+    if (choice === 1) {
+      await ctx.say('edith', `You may not. The tea has unionised. I file ${name} under ${g.poss} own bad ideas.`);
+      continue;
+    }
+    break;
+  }
   const replies = [
     'Good. The dull ones file complaints.',
-    'June tried. He reshelved her request under Fiction.',
+    'The tea has unionised.',
     'Customers rarely ring the bell and vanish. He does.',
     'That\'s the spirit. Unfortunate phrasing.',
   ];
@@ -344,7 +362,7 @@ async function intro(ctx: Ctx): Promise<void> {
   ctx.add('lantern');
   ctx.setFlag('introDone', true);
   ctx.refresh();
-  await ctx.say('edith', 'Three streets, then the shop. Talk to June before you interview the furniture.');
+  await ctx.say('edith', `Three streets, then the shop. Talk to June before ${g.subj} interview the furniture.`);
 }
 
 async function ending(ctx: Ctx): Promise<void> {
@@ -353,7 +371,9 @@ async function ending(ctx: Ctx): Promise<void> {
   await ctx.say('edith', 'You shelved a ghost properly. I hate that look. It means paperwork.');
   await ctx.say('edith', 'This came for you. No. 9 Lantern Lane.');
   await ctx.say('edith', 'Don\'t open it on the tram. The tram has opinions.');
-  await ctx.say('detective', 'Case closed. The envelope can wait.');
+  await ctx.say('detective', `${ctx.profile().name} closes the book. The envelope can wait.`);
+  ctx.sfx('closed');
+  await ctx.card();
 }
 
 async function talkJune(ctx: Ctx): Promise<void> {
@@ -392,7 +412,12 @@ async function talkJune(ctx: Ctx): Promise<void> {
       'Ambrose. He reshelves, and signs nothing.',
       'A demon with library opinions.',
       'No idea. That\'s why I need the key.',
+      'Could he be the tea?',
     ]);
+    if (choice === 3) {
+      await ctx.say('june', 'The tea is Edith\'s. It is already a haunting. Try again.');
+      continue;
+    }
     if (choice === 1) {
       await ctx.say('june', 'Less carnival. Try again.');
       continue;
@@ -479,6 +504,7 @@ export async function lightLantern(ctx: Ctx): Promise<void> {
   ctx.pose('pick');
   ctx.revealRoom();
   ctx.refresh();
+  ctx.sfx('lantern');
   await ctx.say('detective', 'The wick catches. The flame looks entirely too pleased with itself.');
 }
 
@@ -509,60 +535,36 @@ export async function shelve(ctx: Ctx): Promise<void> {
   ctx.showGhost(false);
 }
 
-const PAIR_LINES: [ItemId, ItemId, string][] = [
-  ['matches', 'book', 'Books and matches are how shops become former shops.'],
-  ['matches', 'key', 'The key does not smoke.'],
-  ['matches', 'pencil', 'You could light the pencil. You do not.'],
-  ['matches', 'ledger', 'Burning the accounts is a different genre of crime.'],
-  ['pencil', 'book', 'It is already written. That is rather the trouble.'],
-  ['pencil', 'key', 'You cannot sketch your way through a lock. Sadly.'],
-  ['key', 'book', 'The book is not the stockroom. It has been very clear.'],
-  ['key', 'ledger', 'A key is a poor pen.'],
-  ['key', 'lantern', 'The lantern is not locked. It is sulking.'],
-  ['book', 'ledger', 'Two books. One of them is a confession.'],
-  ['book', 'lantern', 'Reading by lantern is for later. The shelf is for now.'],
-  ['ledger', 'lantern', 'You can see the page. You still need the pencil.'],
-  ['pencil', 'lantern', 'The lantern is not a sharpener.'],
-];
-
 export async function combine(a: ItemId, b: ItemId, ctx: Ctx): Promise<void> {
   const pair = new Set([a, b]);
   if (pair.has('matches') && pair.has('lantern')) {
+    ctx.sfx('ok');
     await lightLantern(ctx);
     return;
   }
   if (pair.has('pencil') && pair.has('ledger')) {
+    ctx.sfx('ok');
     await writeLedger(ctx);
     return;
   }
-  const line = PAIR_LINES.find(([x, y]) => pair.has(x) && pair.has(y));
-  await ctx.say('detective', line ? line[2] : 'That does nothing. The nothing looks faintly embarrassed.');
+  ctx.sfx('fail');
+  await ctx.say('detective', pairLine(a, b));
 }
-
-const USE_LINES: Record<string, string> = {
-  'key:june': 'She is not a lock. She has made that clear.',
-  'book:june': 'June glances over. "Shelf. Not me."',
-  'lantern:june': 'She squints. "Point that at the back room, not at my patience."',
-  'matches:june': 'She does not smoke, and she does not like the implication.',
-  'pencil:edith': 'Edith has pens. Several. She is not the problem.',
-  'book:chair': 'It just left a chair. Chairs are how this started.',
-  'matches:cat': 'The cat is ceramic. It is also offended.',
-  'key:shelf': 'The shelf is not locked. It is particular.',
-  'matches:dark': 'The dark is not a candlestick. The matches want the lantern.',
-  'book:ambrose': 'He shakes his head, kindly. "The shelf, dear. I can\'t hold it any more."',
-  };
 
 export async function useItemOn(item: ItemId, spot: Spot, ctx: Ctx): Promise<void> {
   if ((spot.id === 'ledger' || spot.id === 'desk') && item === 'pencil') {
     if (!ctx.has('ledger')) ctx.add('ledger');
+    ctx.sfx('ok');
     await writeLedger(ctx);
     return;
   }
   if (spot.id === 'shelf' && item === 'book') {
+    ctx.sfx('ok');
     await shelve(ctx);
     return;
   }
   if (spot.id === 'stock-door' && item === 'key') {
+    ctx.sfx('ok');
     await openStock(ctx);
     return;
   }
@@ -575,7 +577,6 @@ export async function useItemOn(item: ItemId, spot: Spot, ctx: Ctx): Promise<voi
     await openStock(ctx);
     return;
   }
-  const scripted = USE_LINES[`${item}:${spot.id}`];
-  if (scripted === '') return;
-  await ctx.say('detective', scripted ?? 'You try it. The shop declines, politely and for good.');
+  ctx.sfx('fail');
+  await ctx.say('detective', useLine(item, spot.id));
 }
