@@ -18,6 +18,7 @@ export class StreetScene extends Phaser.Scene {
   private stride = 0;
   private goal = 760;
   private done = false;
+  private leaving = false;
 
   constructor() {
     super('street');
@@ -25,13 +26,20 @@ export class StreetScene extends Phaser.Scene {
 
   init(data: { dest?: Dest }): void {
     this.dest = data.dest === 'lantern' ? 'lantern' : 'shop';
+    this.done = false;
+    this.leaving = false;
+    this.frame = 0;
+    this.stride = 0;
+    this.x = 180;
   }
 
   create(): void {
     window.__screen = 'street';
+    audio.ambient('street');
     const save = loadSave();
     paintHero(this, {
       name: save.name,
+      detective: save.detective,
       coat: save.coat,
       hat: save.hat,
       scarf: save.scarf,
@@ -40,7 +48,16 @@ export class StreetScene extends Phaser.Scene {
     this.add.image(0, 0, 'street').setOrigin(0, 0).setDisplaySize(W, H);
     this.x = 180;
     this.goal = this.dest === 'lantern' ? 1040 : 620;
-    this.hero = this.add.image(this.x, 640, idleKey({ name: save.name, coat: save.coat, hat: save.hat, scarf: save.scarf, tone: save.tone })).setOrigin(0.5, 1).setScale(0.28);
+    const profile = { name: save.name, detective: save.detective, coat: save.coat, hat: save.hat, scarf: save.scarf, tone: save.tone };
+    this.hero = this.add.image(this.x, 640, idleKey(profile)).setOrigin(0.5, 1).setScale(0.28);
+    if (save.detective === 'sara' && this.textures.exists('skuggi')) {
+      this.add.image(this.x - 70, 648, 'skuggi').setOrigin(0.5, 1).setScale(0.28).setName('skuggi');
+    }
+    this.events.once('shutdown', () => {
+      this.leaving = true;
+      this.time.removeAllEvents();
+      this.tweens.killAll();
+    });
     this.add.text(W / 2, 36, this.dest === 'lantern' ? 'On toward Lantern Lane' : 'Along the street to the bookshop', {
       fontFamily: FONT,
       fontStyle: 'italic',
@@ -52,8 +69,9 @@ export class StreetScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    if (this.leaving || !this.scene.isActive() || !this.hero?.active) return;
     const save = loadSave();
-    const profile = { name: save.name, coat: save.coat, hat: save.hat, scarf: save.scarf, tone: save.tone };
+    const profile = { name: save.name, detective: save.detective, coat: save.coat, hat: save.hat, scarf: save.scarf, tone: save.tone };
     const dt = Math.min(0.05, delta / 1000);
     const step = 140 * dt;
     if (this.x < this.goal) {
@@ -77,10 +95,12 @@ export class StreetScene extends Phaser.Scene {
     const y = 640 - t * (this.dest === 'lantern' ? 70 : 40);
     const sc = 0.32 - t * 0.08;
     this.hero.setPosition(this.x, y).setScale(sc).setFlipX(false);
+    const dog = this.children.getByName('skuggi') as Phaser.GameObjects.Image | null;
+    if (dog?.active) dog.setPosition(this.x - 78, y + 8).setScale(sc * 0.9);
   }
 
   private arrive(): void {
-    if (this.done) return;
+    if (this.done || this.leaving) return;
     this.done = true;
     if (this.dest === 'lantern') {
       this.add.text(W / 2, 92, 'No. 9 is still sealed. The envelope can wait.', {
@@ -91,9 +111,7 @@ export class StreetScene extends Phaser.Scene {
         stroke: '#140e0a',
         strokeThickness: 4,
       }).setOrigin(0.5).setDepth(20).setResolution(2);
-      this.time.delayedCall(1400, () => {
-        if (this.scene.isActive()) this.scene.start('map');
-      });
+      this.time.delayedCall(1400, () => this.leave('map'));
       return;
     }
     const save = loadSave();
@@ -105,8 +123,14 @@ export class StreetScene extends Phaser.Scene {
     save.y = spawn?.y ?? 575;
     save.face = spawn?.face ?? 1;
     writeSave(save);
-    this.time.delayedCall(40, () => {
-      if (this.scene.isActive()) this.scene.start('adventure');
-    });
+    this.time.delayedCall(40, () => this.leave('adventure'));
+  }
+
+  private leave(next: string): void {
+    if (this.leaving || !this.scene.isActive()) return;
+    this.leaving = true;
+    this.time.removeAllEvents();
+    this.tweens.killAll();
+    this.scene.start(next);
   }
 }

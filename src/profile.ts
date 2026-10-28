@@ -1,7 +1,10 @@
+import type { DetectiveId } from './detectives';
+
 export type Tone = 'sarcastic' | 'warm' | 'dramatic';
 
 export type Profile = {
   name: string;
+  detective: DetectiveId;
   coat: string;
   hat: string;
   scarf: string;
@@ -36,7 +39,8 @@ export const TONES: { id: Tone; label: string }[] = [
 ];
 
 export const DEFAULT_PROFILE: Profile = {
-  name: 'Detective',
+  name: 'Edmund',
+  detective: 'crowe',
   coat: 'tan',
   hat: 'brown',
   scarf: 'plaid',

@@ -1,3 +1,4 @@
+import type { DetectiveId } from './detectives';
 import type { Tone } from './profile';
 import type { ItemId } from './save';
 
@@ -328,7 +329,52 @@ const DRAMATIC_FALLBACK = [
 
 let fallbackCursor = 0;
 
-export function lookLine(id: string, fallback: string, times: number, tone: Tone = 'sarcastic'): string {
+const FLAVOUR: Partial<Record<DetectiveId, Record<string, string[]>>> = {
+  crowe: {
+    edith: ['Edith Crane. She files the dead, and she files me under "tolerated".', 'She has already judged the coat. The coat is drafting a complaint.'],
+    june: ['June Bellweather. Arms folded like a lock that knows the combination and will not share it.', 'She inherited a shop, a ghost, and a doorbell with opinions.'],
+    ambrose: ['Ambrose Bellweather. Pale as a receipt, and twice as hard to throw away.', 'A man who stayed for the shelving. I respect the paperwork, if not the hours.'],
+    chair: ['The chair rocks. I have not sat. My knees have a union.', 'Edith says it is only mostly haunted. The chair is the part that disagrees.'],
+    doorbell: ['The doorbell rings for nobody. Nobody, in this town, is usually a customer.', 'June hates this bell. The bell has not taken the hint.'],
+    shelf: ['A gap between the poets. Even the poets are pretending not to notice, which is how you know they have.', 'One slim green book would shut that mouth of a shelf.'],
+  },
+  sara: {
+    edith: ['Edith. The room smells of tea and a dog who has already decided who is safe.', 'She keeps files. I keep a dog. Between us, something gets found.'],
+    june: ['June. Skuggi sat before I did. He only does that for people who are telling the truth, or holding treats.', 'She is tired in the way trainers know. The shop has been pulling on the lead.'],
+    ambrose: ['He is not a threat. Skuggi would have said so, loudly, and then hidden behind my boots.', 'A ghost who shelves books. I have trained worse habits.'],
+    chair: ['The chair moves. Skuggi watches it and does not growl. That is a vote.', 'Empty chairs that rock are just dogs who have not learned "stay".'],
+    doorbell: ['The bell rings at nothing. Skuggi\'s ears say the nothing has feet.', 'June flinches. The dog does not. I trust the dog.'],
+    shelf: ['A gap the size of a book, or a dog\'s mistake. This one is a book.', 'Put the thing back where it lives. That is half of training, and all of this case.'],
+  },
+  barty: {
+    edith: ['Edith. My niece. She still calls when the cabinet hums. I still come. Do not write that down.', 'I retired. The dead, rudely, kept my forwarding address.'],
+    june: ['Miss Bellweather. Your grandfather and I argued about poetry. He won. Once. He has not shut up about it.', 'A shop that reshelves itself is a man who cannot leave a job unfinished. I know the type. I shave him.'],
+    ambrose: ['Bellweather. Still alphabetising the afterlife. Some of us were promised a rest.', 'You look terrible. Death has not improved your filing, which is saying something.'],
+    chair: ['A rocking chair with no one in it. I have owned three. They all outlived the point.', 'It moves. I have seen chairs do worse, and I have sat in them.'],
+    doorbell: ['A bell that rings for an empty street. In my day we called that a customer and charged them.', 'June hates it. Ambrose loves it. I have been in the middle of that argument since before you were born.'],
+    shelf: ['A gap. Poets. I have seen this haunting. It ends with a book, not a speech.', 'Put it back. Heroes make speeches. Old men put the book where it goes.'],
+  },
+  pip: {
+    edith: ['Miss Crane! The scanner beeped at your lamp, your tea, and the concept of being on time. So. A ghost?', 'She has a file on me. I hope it says "promising". It probably says "loud".'],
+    june: ['A real haunted bookshop. I prepared a speech. I can also not give it. Your choice. Mostly.', 'June looks like she has heard fourteen theories today. I am fifteen. I am the good one.'],
+    ambrose: ['The scanner is screaming, which means you are a ghost or a very committed radiator. Hello!', 'A real ghost! I should have brought a better speech. And maybe a grown-up. You will do.'],
+    chair: ['The chair rocked and the scanner beeped at the radiator. One of those is a clue. I hope it is the chair.', 'Empty chair, moving. I have a note for this. The note just says "whoa".'],
+    doorbell: ['It rang! The scanner also rang. They are not friends. I am collecting data, which is a kind of courage.', 'June hates the bell. My scanner loves the bell. I am Switzerland, but excited.'],
+    shelf: ['A gap. The scanner says "book", and also "toast". I am going with book.', 'Between the poets. Even I know that is a clue and not a sandwich.'],
+  },
+  ondine: {
+    edith: ['Edith, darling. The room is full of unfinished sentences. Shall we tidy one?', 'The veil twitched in your doorway. Someone here misses being offered a chair.'],
+    june: ['Your grandfather is not gone, dear. He is merely bad at clocking out.', 'June. He loves you in the only way a bookseller knows. He keeps the shelves honest, which is rude, and tender.'],
+    ambrose: ['Ambrose, darling, death is not an excuse for a messy fiction section.', 'There you are. We have met in the pause before a bell. You were always early.'],
+    chair: ['The chair is occupied by someone who has forgotten how to be heavy. I have said hello.', 'It rocks because it is being polite. Most furniture is, if you ask it properly.'],
+    doorbell: ['The bell is Ambrose checking the lock. I told him a postcard would do. He does not own stamps.', 'June flinches. The bell is a heartbeat. I have heard ruder ones at dinner.'],
+    shelf: ['A gap between the poets. He left it on purpose, the way some men leave a light on.', 'The book knows the way home. Books always do. People are the difficult edition.'],
+  },
+};
+
+export function lookLine(id: string, fallback: string, times: number, tone: Tone = 'sarcastic', detective: DetectiveId = 'crowe'): string {
+  const flavoured = FLAVOUR[detective]?.[id];
+  if (flavoured && flavoured.length > 0) return flavoured[times % flavoured.length] ?? fallback;
   const voiced = tone === 'warm' ? WARM[id] : tone === 'dramatic' ? DRAMATIC[id] : undefined;
   const lines = voiced && voiced.length > 0 ? voiced : LOOKS[id];
   if (!lines || lines.length === 0) return fallback;

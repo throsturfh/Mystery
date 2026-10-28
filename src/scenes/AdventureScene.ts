@@ -21,7 +21,9 @@ import {
   type Spot,
   type Verb,
 } from '../story';
+import { detectiveById } from '../detectives';
 import { idleKey, paintHero, walkKey } from '../tint';
+import { aside } from '../voices';
 
 type Mode = 'play' | 'speech' | 'choice' | 'fade' | 'card' | 'journal' | 'menu' | 'confirm';
 
@@ -77,6 +79,7 @@ export class AdventureScene extends Phaser.Scene {
   private ctx!: Ctx;
   private scenery: { img: Phaser.GameObjects.Image; show: () => boolean }[] = [];
   private june?: Phaser.GameObjects.Image;
+  private dog?: Phaser.GameObjects.Image;
   private spiritLabel!: Phaser.GameObjects.Text;
   private stride = 0;
   private walkFrame = 0;
@@ -87,6 +90,7 @@ export class AdventureScene extends Phaser.Scene {
   private savedText!: Phaser.GameObjects.Text;
   private cardResolve: (() => void) | null = null;
   private overlay: Phaser.GameObjects.GameObject[] = [];
+  private departing = false;
 
   constructor() {
     super('adventure');
@@ -104,9 +108,11 @@ export class AdventureScene extends Phaser.Scene {
     this.motes = [];
     this.spots = [];
     this.june = undefined;
+    this.dog = undefined;
     this.ghost = undefined;
     this.envelope = undefined;
     this.selected = null;
+    this.departing = false;
     this.lookMode = false;
     this.walking = false;
     this.goal = null;
@@ -202,7 +208,17 @@ export class AdventureScene extends Phaser.Scene {
     this.input.mouse?.disableContextMenu();
     const onHide = () => this.persist();
     window.addEventListener('pagehide', onHide);
-    this.events.once('shutdown', () => window.removeEventListener('pagehide', onHide));
+    this.events.once('shutdown', () => {
+      this.departing = true;
+      window.removeEventListener('pagehide', onHide);
+      this.tweens.killAll();
+      this.time.removeAllEvents();
+      this.input.off('pointerdown');
+      this.input.off('pointermove');
+      this.input.off('pointerup');
+      this.cameras.main?.resetFX();
+      this.dog = undefined;
+    });
     document.getElementById('loading')?.remove();
     this.drawRoom();
     this.place(this.fx, this.fy, this.face);
@@ -212,6 +228,7 @@ export class AdventureScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    if (this.departing || !this.scene.isActive() || !this.hero?.active) return;
     const dt = Math.min(0.05, delta / 1000);
     if (this.walking && this.goal) {
       const dx = this.goal.x - this.fx;
@@ -239,6 +256,7 @@ export class AdventureScene extends Phaser.Scene {
     }
     this.drawFog(dt);
     this.drawHero(dt);
+    this.drawDog();
     const talking = this.mode === 'speech' || this.mode === 'choice' || this.mode === 'card' || this.mode === 'menu' || this.mode === 'confirm';
     this.plaque.setVisible(this.save.room === 'office' && this.save.flags.seenEnding === true && !talking);
     this.lane.setVisible(this.save.room === 'office' && this.save.flags.seenEnding === true && !talking);
@@ -279,7 +297,7 @@ export class AdventureScene extends Phaser.Scene {
       quip: (id, fallback) => {
         const times = this.lookCounts.get(id) ?? 0;
         this.lookCounts.set(id, times + 1);
-        return lookLine(id, fallback, times, this.save.tone);
+        return lookLine(id, fallback, times, this.save.tone, this.save.detective);
       },
       sfx: (name, pan) => {
         audio.play(name as SfxName, pan ?? 0);
@@ -289,18 +307,24 @@ export class AdventureScene extends Phaser.Scene {
       face: (who) => this.faceNpc(who),
       handoff: () => this.handoffKey(),
       openMap: async () => {
+        if (this.departing) return;
+        this.departing = true;
         this.persist();
-        this.time.delayedCall(40, () => {
-          if (this.scene.isActive()) this.scene.start('map');
+        this.tweens.killAll();
+        this.time.delayedCall(30, () => {
+          if (!this.departing || !this.scene.isActive()) return;
+          this.scene.start('map');
         });
       },
       card: () => this.showCard(),
+      settleBook: () => this.glideBook(),
     };
   }
 
   private profile(): Profile {
     return {
       name: this.save.name,
+      detective: this.save.detective,
       coat: this.save.coat,
       hat: this.save.hat,
       scarf: this.save.scarf,
@@ -325,6 +349,7 @@ export class AdventureScene extends Phaser.Scene {
 
   private finishScript(): void {
     this.busyScript = false;
+    audio.duck(false);
     this.clearSpeech();
     this.clearChoices();
     if (this.mode !== 'fade') this.mode = 'play';
@@ -448,6 +473,7 @@ export class AdventureScene extends Phaser.Scene {
       const pan = (x - 640) / 640;
       audio.play('ghost', pan);
       audio.play('whisper', pan);
+      if (this.save.detective === 'sara') audio.play('bark', pan);
       buzz([24, 30, 24]);
       this.ghostBurst(x, 590);
       this.syncGhost();
@@ -469,13 +495,96 @@ export class AdventureScene extends Phaser.Scene {
     this.props = [];
     this.scenery = [];
     this.june = undefined;
+    this.dog = undefined;
+  }
+
+  private placeDog(): void {
+    if (this.save.detective !== 'sara' || !this.textures.exists('skuggi')) return;
+    this.dog = this.add.image(this.fx - 96, this.fy + 6, 'skuggi').setOrigin(0.5, 1).setScale(0.32).setDepth(500 + this.fy);
+    this.props.push(this.dog);
+  }
+
+  private drawDog(): void {
+    const dog = this.dog;
+    if (!dog?.active) return;
+    const goalX = this.fx - this.face * 86;
+    const goalY = this.fy + 4;
+    dog.x += (goalX - dog.x) * 0.08;
+    dog.y += (goalY - dog.y) * 0.12;
+    dog.setFlipX(dog.x > this.fx);
+    dog.setDepth(490 + dog.y);
+  }
+
+  private glideBook(): Promise<void> {
+    const seat = { x: 498, y: 198, scale: 0.62 };
+    return new Promise((resolve) => {
+      const book = this.add.image(this.fx + this.face * 28, this.fy - 150, 'shelf-green').setOrigin(0.5, 1).setDepth(1300).setScale(1.05);
+      this.tweens.add({
+        targets: book,
+        x: seat.x,
+        y: seat.y,
+        scale: seat.scale,
+        duration: 880,
+        ease: 'Sine.easeInOut',
+        onComplete: () => {
+          book.destroy();
+          resolve();
+        },
+      });
+    });
+  }
+
+  private dogName(): string {
+    return detectiveById('sara').dog ?? 'Skuggi';
+  }
+
+  private async onDog(): Promise<void> {
+    const fetchable = this.fetchable();
+    await this.guard(async () => {
+      const line = aside(this.save.detective, 'dog', this.save.tone);
+      if (!fetchable) {
+        audio.play('bark');
+        await this.say('detective', line || `${this.dogName()} wags. The room, for once, is keeping its secrets in their places.`);
+        return;
+      }
+      audio.play('bark');
+      await this.say('detective', `${this.dogName()}'s ears come up. He would like a job.`);
+      const dog = this.dog;
+      if (dog?.active) {
+        await new Promise<void>((resolve) => {
+          this.tweens.add({
+            targets: dog,
+            x: fetchable.x,
+            y: fetchable.y,
+            duration: 420,
+            yoyo: true,
+            onComplete: () => resolve(),
+          });
+        });
+      }
+      if (!this.save.items.includes(fetchable.item)) this.save.items.push(fetchable.item);
+      audio.play('pickup');
+      this.refresh();
+      await this.say('detective', `${this.dogName()} brings you the ${ITEM_NAME[fetchable.item].toLowerCase()}, extremely proud of the procedure.`);
+    });
+  }
+
+  private fetchable(): { item: ItemId; x: number; y: number } | null {
+    const has = (id: ItemId) => this.save.items.includes(id);
+    const f = this.save.flags;
+    if (this.save.room === 'shop' && !has('pencil') && !f.ledgerWritten) return { item: 'pencil', x: 972, y: 372 };
+    if (this.save.room === 'nook' && !has('matches') && !f.lanternLit) return { item: 'matches', x: 186, y: 448 };
+    if (this.save.room === 'nook' && !has('book') && !f.bookShelved) return { item: 'book', x: 430, y: 342 };
+    if (this.save.room === 'stock' && f.lanternLit && !has('ledger') && !f.ledgerWritten) return { item: 'ledger', x: 1048, y: 458 };
+    return null;
   }
 
   private placeTrophies(): void {
+    if (this.save.room !== 'trophy') return;
     const f = this.save.flags;
-    if (f.gotKey) this.addScenery('icon-key', 900, 232, 0.5, 0.92, 27, () => true, 0.34);
-    if (f.bookShelved) this.addScenery('prop-book', 930, 236, 0.5, 0.96, 26, () => true, 0.1);
-    if (f.seenEnding) this.addScenery('trophy-medal', 948, 234, 0.5, 0.94, 26, () => true, 0.1);
+    if (f.gotKey) this.addScenery('icon-key', 512, 378, 0.5, 1, 40, () => true, 0.32);
+    if (f.bookShelved) this.addScenery('prop-book', 778, 428, 0.5, 1, 40, () => true, 0.11);
+    if (f.seenEnding) this.addScenery('trophy-medal', 824, 368, 0.5, 1, 40, () => true, 0.2);
   }
 
   private placeSpirit(): void {
@@ -581,12 +690,13 @@ export class AdventureScene extends Phaser.Scene {
     const has = (id: 'pencil' | 'matches' | 'book' | 'ledger') => this.save.items.includes(id);
     const f = this.save.flags;
     if (room === 'shop') {
-      this.addScenery('prop-book', 478, 214, 0.5, 0.9, 16, () => f.bookShelved === true, 0.22);
+      this.addScenery('shelf-green', 498, 198, 0.5, 1, 16, () => f.bookShelved === true, 0.62);
       this.addScenery('prop-pencil', 972, 372, 0.45, 0.82, 16, () => !has('pencil') && f.ledgerWritten !== true, 0.28);
       this.june = this.add.image(620, 585, this.save.flags.gotKey ? 'june-nokeys' : 'june').setOrigin(0.5, 1).setScale(0.33).setDepth(500 + 585);
       this.props.push(this.june);
     }
-    if (room === 'office') this.placeTrophies();
+    this.placeDog();
+    if (room === 'trophy') this.placeTrophies();
     if (room === 'nook') {
       this.addScenery('prop-matches', 186, 448, 0.5, 0.85, 16, () => !has('matches') && f.lanternLit !== true, 0.26);
       this.addScenery('prop-book', 430, 342, 0.5, 1, 16, () => !has('book') && f.bookShelved !== true, 0.22);
@@ -695,7 +805,9 @@ export class AdventureScene extends Phaser.Scene {
     this.lane.setVisible(false);
     this.line = text;
     const speaker = who === 'detective' ? this.save.name || 'Detective' : SPEAKER_NAME[who];
-    audio.blip(who === 'ambrose' ? 680 : who === 'edith' ? 490 : who === 'june' ? 560 : 610, 0.07, 0.028);
+    audio.duck(true);
+    audio.murmur(who === 'edith' || who === 'june' || (who === 'detective' && (this.save.detective === 'sara' || this.save.detective === 'ondine')));
+    audio.blip();
     const live = document.getElementById('live');
     if (live) live.textContent = `${speaker}. ${text}`;
     const panelX = 150;
@@ -965,6 +1077,7 @@ export class AdventureScene extends Phaser.Scene {
   }
 
   private onUp(p: Phaser.Input.Pointer): void {
+    if (this.departing) return;
     this.pointerDown = false;
     this.longCall?.remove(false);
     this.longCall = null;
@@ -997,6 +1110,7 @@ export class AdventureScene extends Phaser.Scene {
         if (this.hitRect(w.x, w.y, 390, 394, 500, 56)) {
           this.clearOverlay();
           this.persist();
+          this.departing = true;
           this.scene.start('title');
           return;
         }
@@ -1099,6 +1213,10 @@ export class AdventureScene extends Phaser.Scene {
       this.selected = this.selected === id ? null : id;
       this.lookMode = false;
       this.redrawHud();
+      return;
+    }
+    if (this.dog?.active && Math.hypot(w.x - this.dog.x, w.y - this.dog.y) < 78 && w.y < HUD_TOP) {
+      void this.onDog();
       return;
     }
     if (w.y >= HUD_TOP) return;
@@ -1367,7 +1485,9 @@ export class AdventureScene extends Phaser.Scene {
       nameField: document.getElementById('creator-name')?.classList.contains('show') === true,
       spirit: this.save.spirit,
       tone: this.save.tone,
+      detective: this.save.detective,
       june: this.june?.active ? { x: this.june.x, y: this.june.y, flip: this.june.flipX } : null,
+      dog: this.dog?.active ? { x: this.dog.x, y: this.dog.y } : null,
     };
   }
 

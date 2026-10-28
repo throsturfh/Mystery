@@ -3,15 +3,19 @@ import type { Profile } from './profile';
 
 const FRAMES = ['detective', 'walk-0', 'walk-1', 'walk-2', 'walk-3', 'walk-4', 'walk-5'] as const;
 
-function layerKey(frame: string, part: string): string {
-  return `L-${frame}-${part}`;
+function layerKey(frame: string, part: string, detective: string): string {
+  if (detective === 'crowe') return `L-${frame}-${part}`;
+  return `L-${detective}-${frame}-${part}`;
 }
 
 function compose(scene: Phaser.Scene, outKey: string, frame: string, profile: Profile): void {
-  const base = scene.textures.get(layerKey(frame, 'base')).getSourceImage() as HTMLImageElement;
-  const coat = scene.textures.get(layerKey(frame, `coat-${profile.coat}`)).getSourceImage() as CanvasImageSource;
-  const scarf = scene.textures.get(layerKey(frame, `scarf-${profile.scarf}`)).getSourceImage() as CanvasImageSource;
-  const hat = scene.textures.get(layerKey(frame, `hat-${profile.hat}`)).getSourceImage() as CanvasImageSource;
+  const who = profile.detective || 'crowe';
+  const baseTex = scene.textures.get(layerKey(frame, 'base', who));
+  if (!baseTex || baseTex.key === '__MISSING') return;
+  const base = baseTex.getSourceImage() as HTMLImageElement;
+  const coat = scene.textures.get(layerKey(frame, `coat-${profile.coat}`, who)).getSourceImage() as CanvasImageSource;
+  const scarf = scene.textures.get(layerKey(frame, `scarf-${profile.scarf}`, who)).getSourceImage() as CanvasImageSource;
+  const hat = scene.textures.get(layerKey(frame, `hat-${profile.hat}`, who)).getSourceImage() as CanvasImageSource;
   const canvas = document.createElement('canvas');
   canvas.width = base.width;
   canvas.height = base.height;
@@ -21,8 +25,26 @@ function compose(scene: Phaser.Scene, outKey: string, frame: string, profile: Pr
   ctx.drawImage(coat, 0, 0);
   ctx.drawImage(scarf, 0, 0);
   ctx.drawImage(hat, 0, 0);
-  if (scene.textures.exists(outKey)) scene.textures.remove(outKey);
-  scene.textures.addCanvas(outKey, canvas);
+  if (scene.textures.exists(outKey)) {
+    const existing = scene.textures.get(outKey).getSourceImage();
+    if (existing instanceof HTMLCanvasElement) {
+      if (existing.width !== canvas.width || existing.height !== canvas.height) {
+        existing.width = canvas.width;
+        existing.height = canvas.height;
+      }
+      const live = existing.getContext('2d');
+      live?.clearRect(0, 0, existing.width, existing.height);
+      live?.drawImage(canvas, 0, 0);
+      (scene.textures.get(outKey) as Phaser.Textures.CanvasTexture).refresh();
+      return;
+    }
+  }
+  if (!scene.textures.exists(outKey)) scene.textures.addCanvas(outKey, canvas);
+}
+
+/** One standing portrait, for the detective picker. Does not touch the walk cycle. */
+export function paintPortrait(scene: Phaser.Scene, profile: Profile, outKey: string): void {
+  compose(scene, outKey, 'detective', profile);
 }
 
 /** Stack pre-painted body, coat, scarf and hat. No runtime colour masking. */

@@ -2,6 +2,7 @@ import type { Pt } from './geom';
 import type { Profile, Tone } from './profile';
 import { pairLine, useLine } from './quips';
 import type { Flag, ItemId, RoomId, Save, Speaker } from './save';
+import { aside } from './voices';
 
 export type Verb =
   | 'look'
@@ -59,6 +60,7 @@ export interface Ctx {
   handoff(): Promise<void>;
   openMap(): Promise<void>;
   card(): Promise<void>;
+  settleBook(): Promise<void>;
 }
 
 function byTone(tone: Tone, lines: Record<Tone, string>): string {
@@ -92,6 +94,12 @@ export const WALKS: Record<RoomId, Pt[]> = {
     { x: 1180, y: 616 },
     { x: 90, y: 616 },
   ],
+  trophy: [
+    { x: 180, y: 540 },
+    { x: 1100, y: 540 },
+    { x: 1180, y: 610 },
+    { x: 100, y: 610 },
+  ],
 };
 
 export function walkFor(room: RoomId): Pt[] {
@@ -113,6 +121,9 @@ export const ENTRY: Record<RoomId, Record<string, Spawn>> = {
   },
   stock: {
     shop: { x: 280, y: 575, face: 1 },
+  },
+  trophy: {
+    office: { x: 240, y: 580, face: 1 },
   },
 };
 
@@ -143,13 +154,15 @@ const spot = (
 export function spotsFor(save: Save, room: RoomId): Spot[] {
   const spots = baseSpots(save, room);
   if (!save.spirit) return spots;
-  const ghost: Record<RoomId, Spot> = {
+  const ghost: Partial<Record<RoomId, Spot>> = {
     office: spot('spirit-office', 'faint writing', 520, 210, 70, 22, 520, 568, 1, 'Only the spirit lantern holds it: the chair remembers who sat.', 'look'),
     shop: spot('spirit-shop', 'faint writing', 520, 240, 70, 20, 520, 568, -1, 'On the plaster, barely: between the poets.', 'look'),
     nook: spot('spirit-nook', 'a breath on the glass', 470, 250, 50, 18, 470, 568, -1, 'The round window says he only wanted the door locked behind June.', 'look'),
     stock: spot('spirit-stock', 'a name in the dust', 720, 280, 60, 18, 680, 570, 1, 'Dust on the shelf: A. Bellweather, still counting.', 'look'),
+    trophy: spot('spirit-trophy', 'a dustless square', 1040, 250, 40, 18, 960, 575, 1, 'A space kept clean for a case that has not happened yet.', 'look'),
   };
-  return spots.concat(ghost[room]);
+  const extra = ghost[room];
+  return extra ? spots.concat(extra) : spots;
 }
 
 function baseSpots(save: Save, room: RoomId): Spot[] {
@@ -164,11 +177,8 @@ function baseSpots(save: Save, room: RoomId): Spot[] {
       spot('chair', 'the rocking chair', 760, 400, 80, 70, 680, 578, 1, 'A rocking chair. It moves when the room is being honest.', 'look'),
       spot('window', 'the window', 440, 250, 100, 110, 440, 568, -1, 'Rain on the glass. The city is minding its own business, for once.', 'look'),
       spot('coat', 'the coat rack', 230, 370, 55, 120, 320, 575, -1, 'Spare coats. None of them have given notice.', 'look'),
-      spot('side-door', 'the side door', 1210, 310, 60, 150, 1060, 575, 1, 'A dark doorway. The street is that way.', 'map'),
+      spot('side-door', 'the collection room', 1210, 310, 60, 150, 1060, 575, 1, 'The collection room. Solved cases leave something on the shelves.', 'exit', { to: 'trophy', entry: 'office' }),
       spot('office-door', 'the street', 95, 280, 75, 180, 250, 575, -1, 'The street door. The district is drawn on the far side.', 'map'),
-      ...(save.flags.gotKey ? [spot('trophy-key', 'the spare key', 900, 220, 22, 16, 860, 572, 1, 'June\'s spare, resting on the cabinet books.', 'look')] : []),
-      ...(save.flags.bookShelved ? [spot('trophy-book', 'the spare copy', 930, 222, 22, 16, 900, 572, 1, 'A spare green book, sitting on the cabinet.', 'look')] : []),
-      ...(save.flags.seenEnding ? [spot('trophy-medal', 'the blue box', 948, 220, 24, 16, 940, 572, 1, 'A small blue box, shut. Edith has not said what is inside.', 'look')] : []),
     ];
   }
   if (room === 'shop') {
@@ -194,6 +204,32 @@ function baseSpots(save: Save, room: RoomId): Spot[] {
       spot('bookcase', 'the bookcase', 820, 280, 180, 140, 720, 568, 1, 'A bookcase with no gaps worth trusting. The one that matters is back in the shop.', 'look'),
       spot('stock-door', 'the stockroom door', 1165, 310, 65, 155, 1000, 572, 1, 'The stockroom door. It has the look of a place that keeps old accounts.', 'stock'),
       spot('nook-exit', 'the shop', 90, 280, 70, 175, 240, 575, -1, 'Back to the shop floor, where June is counting your mistakes.', 'exit', { to: 'shop', entry: 'nook' }),
+    ];
+  }
+  if (room === 'trophy') {
+    const tone = save.tone;
+    const memory = (id: string, name: string, x: number, y: number, lines: Record<Tone, string>, show: boolean) =>
+      show
+        ? [spot(id, name, x, y, 36, 28, x, 575, 1, lines[tone], 'look')]
+        : [spot(id, `an empty ${name}`, x, y, 36, 28, x, 575, 1, 'A bare stand. The next case has not earned a place here.', 'look')];
+    return [
+      spot('trophy-door', 'dispatch', 150, 300, 70, 160, 280, 575, -1, 'Back to Edith, who will pretend she does not dust these shelves.', 'exit', { to: 'office', entry: 'start' }),
+      ...memory('mem-key', 'June\'s key', 512, 348, {
+        sarcastic: 'June\'s spare. She trusted a stranger with the back room. That is either faith or exhaustion.',
+        warm: 'June put this in your hand. She was frightened, and she was precise. Both were brave.',
+        dramatic: 'The key that opened a grandfather\'s last account. It still smells of cold tea.',
+      }, f.gotKey === true),
+      ...memory('mem-book', 'the green book', 778, 390, {
+        sarcastic: 'The Lantern and the Lock, home at last, looking unbearably pleased with itself.',
+        warm: 'Ambrose left this on the wrong shelf. Putting it back was the whole apology.',
+        dramatic: 'One slim book. A ghost kept a shop open for the sake of its gap.',
+      }, f.bookShelved === true),
+      ...memory('mem-box', 'the blue box', 824, 330, {
+        sarcastic: 'Edith\'s blue box. She will not say what is in it. The not-saying is the point.',
+        warm: 'A small blue box from dispatch. Some thanks arrive shut, and that is allowed.',
+        dramatic: 'Sealed. Like No. 9 Lantern Lane. Like every good ending.',
+      }, f.seenEnding === true),
+      spot('mem-wait', 'the waiting shelf', 1040, 400, 50, 36, 980, 575, 1, 'Room for the next house, whenever it decides to misbehave.', 'look'),
     ];
   }
   if (!save.flags.lanternLit) {
@@ -262,6 +298,9 @@ export async function perform(spot: Spot, ctx: Ctx): Promise<void> {
     case 'dark':
       ctx.pose('look');
       if (spot.id === 'doorbell') ctx.sfx('bell');
+      if (ctx.profile().detective === 'pip' && ['lamp', 'phone', 'register', 'shop-lamp', 'nook-lamp', 'doorbell', 'cabinet'].includes(spot.id)) {
+        ctx.sfx('blip');
+      }
       await ctx.say('detective', ctx.quip(spot.id, spot.look));
       return;
     case 'edith':
@@ -365,6 +404,10 @@ async function intro(ctx: Ctx): Promise<void> {
   const name = ctx.profile().name;
   const tone = ctx.tone();
   await ctx.face('edith');
+  const hello = aside(ctx.profile().detective, 'edith', tone);
+  if (hello) await ctx.say('detective', hello);
+  const secret = aside(ctx.profile().detective, 'secret', tone);
+  if (secret) await ctx.say('detective', secret);
   await ctx.say('edith', byTone(tone, {
     sarcastic: `${name}. The chair is only mostly haunted. Sit, or don't.`,
     warm: `${name}. Come in. The chair is mostly harmless, and the tea is hot.`,
@@ -421,6 +464,8 @@ async function ending(ctx: Ctx): Promise<void> {
 async function talkJune(ctx: Ctx): Promise<void> {
   await ctx.face('june');
   const tone = ctx.tone();
+  const hello = aside(ctx.profile().detective, 'june', tone);
+  if (hello && !ctx.has('key')) await ctx.say('detective', hello);
   if (ctx.has('key')) {
     if (ctx.flag('bookShelved')) {
       await ctx.say('june', 'The shelf looks right. Don\'t tell me he was pleasant about it.');
@@ -500,6 +545,8 @@ export async function ambroseTree(ctx: Ctx): Promise<void> {
   }
   ctx.showGhost(true);
   await ctx.face('ambrose');
+  const hello = aside(ctx.profile().detective, 'ambrose', tone);
+  if (hello) await ctx.say('detective', hello);
   await ctx.say('ambrose', byTone(tone, {
     sarcastic: 'Oh. A customer. I was just closing the account.',
     warm: 'Oh. You found me. I was only finishing the last line.',
@@ -578,6 +625,7 @@ export async function shelve(ctx: Ctx): Promise<void> {
   }
   ctx.pose('pick');
   ctx.remove('book');
+  await ctx.settleBook();
   ctx.setFlag('bookShelved', true);
   ctx.setFlag('ambroseAsked', true);
   ctx.setFlag('ambroseBye', true);

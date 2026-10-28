@@ -18,7 +18,9 @@ declare global {
       nameField: boolean;
       spirit: boolean;
       tone: string;
+      detective?: string;
       june: { x: number; y: number; flip: boolean } | null;
+      dog?: { x: number; y: number } | null;
     };
     __screen?: string;
   }

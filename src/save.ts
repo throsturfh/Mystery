@@ -1,8 +1,9 @@
+import { cleanDetective, type DetectiveId } from './detectives';
 import { cleanName, cleanTone, DEFAULT_PROFILE, type Tone } from './profile';
 
 export const SAVE_KEY = 'hollowmere-dispatch-v1';
 
-export type RoomId = 'office' | 'shop' | 'nook' | 'stock';
+export type RoomId = 'office' | 'shop' | 'nook' | 'stock' | 'trophy';
 export type ItemId = 'lantern' | 'matches' | 'key' | 'pencil' | 'ledger' | 'book';
 export type Flag =
   | 'introDone'
@@ -21,7 +22,7 @@ export type Cases = {
 };
 
 export type Save = {
-  version: 7;
+  version: 8;
   started: boolean;
   room: RoomId;
   entry: string;
@@ -32,6 +33,7 @@ export type Save = {
   flags: Partial<Record<Flag, boolean>>;
   learnedTap: boolean;
   name: string;
+  detective: DetectiveId;
   coat: string;
   hat: string;
   scarf: string;
@@ -41,7 +43,7 @@ export type Save = {
   cases: Cases;
 };
 
-const ROOMS = new Set<RoomId>(['office', 'shop', 'nook', 'stock']);
+const ROOMS = new Set<RoomId>(['office', 'shop', 'nook', 'stock', 'trophy']);
 const ITEMS = new Set<ItemId>(['lantern', 'matches', 'key', 'pencil', 'ledger', 'book']);
 
 export const ITEM_NAME: Record<ItemId, string> = {
@@ -55,7 +57,7 @@ export const ITEM_NAME: Record<ItemId, string> = {
 
 export function freshSave(): Save {
   return {
-    version: 7,
+    version: 8,
     started: false,
     room: 'office',
     entry: 'start',
@@ -66,6 +68,7 @@ export function freshSave(): Save {
     flags: {},
     learnedTap: false,
     name: DEFAULT_PROFILE.name,
+    detective: 'crowe',
     coat: DEFAULT_PROFILE.coat,
     hat: DEFAULT_PROFILE.hat,
     scarf: DEFAULT_PROFILE.scarf,
@@ -86,7 +89,7 @@ export function loadSave(): Save {
       moths?: unknown;
       cases?: Partial<Cases>;
     };
-    if (!parsed || (parsed.version !== 5 && parsed.version !== 6 && parsed.version !== 7)) return freshSave();
+    if (!parsed || (parsed.version !== 5 && parsed.version !== 6 && parsed.version !== 7 && parsed.version !== 8)) return freshSave();
     if (!parsed.room || !ROOMS.has(parsed.room)) return freshSave();
     if (typeof parsed.x !== 'number' || typeof parsed.y !== 'number') return freshSave();
     const flags = parsed.flags && typeof parsed.flags === 'object' ? parsed.flags : {};
@@ -95,7 +98,7 @@ export function loadSave(): Save {
       lantern: parsed.cases?.lantern === true || flags.seenEnding === true,
     };
     return {
-      version: 7,
+      version: 8,
       started: parsed.started === true,
       room: parsed.room,
       entry: typeof parsed.entry === 'string' ? parsed.entry : 'start',
@@ -106,6 +109,7 @@ export function loadSave(): Save {
       flags,
       learnedTap: parsed.learnedTap === true,
       name: cleanName(typeof parsed.name === 'string' ? parsed.name : DEFAULT_PROFILE.name),
+      detective: cleanDetective((parsed as { detective?: unknown }).detective),
       coat: typeof parsed.coat === 'string' ? parsed.coat : DEFAULT_PROFILE.coat,
       hat: typeof parsed.hat === 'string' ? parsed.hat : DEFAULT_PROFILE.hat,
       scarf: typeof parsed.scarf === 'string' ? parsed.scarf : DEFAULT_PROFILE.scarf,
@@ -124,7 +128,7 @@ export function hasContinue(): boolean {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return false;
     const parsed = JSON.parse(raw) as { version?: number; started?: boolean };
-    return (parsed.version === 5 || parsed.version === 6 || parsed.version === 7) && parsed.started === true;
+    return (parsed.version === 5 || parsed.version === 6 || parsed.version === 7 || parsed.version === 8) && parsed.started === true;
   } catch {
     return false;
   }

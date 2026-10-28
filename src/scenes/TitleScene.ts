@@ -2,12 +2,13 @@ import Phaser from 'phaser';
 import { audio } from '../audio';
 import { H, W } from '../config';
 import { hideCreatorField, placeCreatorField } from '../creatorDom';
-import { COATS, HATS, SCARVES, TONES, cleanName, cleanTone, type Tone } from '../profile';
+import { DETECTIVES, detectiveById, type DetectiveId } from '../detectives';
+import { TONES, cleanName, cleanTone, type Tone } from '../profile';
 import { freshSave, hasContinue, loadSave, writeSave } from '../save';
 import { loadSettings, writeSettings, type Settings } from '../settings';
-import { paintHero } from '../tint';
+import { paintHero, paintPortrait } from '../tint';
 
-type Mode = 'title' | 'create' | 'settings' | 'credits';
+type Mode = 'title' | 'pick' | 'create' | 'settings' | 'credits';
 type Hit = { id: string; x: number; y: number; w: number; h: number };
 
 const FONT = 'Cormorant Garamond, Georgia, serif';
@@ -16,6 +17,7 @@ const DISPLAY = 'Cinzel, Georgia, serif';
 export class TitleScene extends Phaser.Scene {
   private mode: Mode = 'title';
   private hits: Hit[] = [];
+  private detective: DetectiveId = 'crowe';
   private coat = 'tan';
   private hat = 'brown';
   private scarf = 'plaid';
@@ -53,6 +55,7 @@ export class TitleScene extends Phaser.Scene {
     this.add.image(0, 0, 'office').setOrigin(0, 0).setTint(0x9a8a74);
     this.add.rectangle(W / 2, H / 2, W, H, 0x140e0a, 0.45);
     if (this.mode === 'title') this.drawTitle();
+    else if (this.mode === 'pick') this.drawPick();
     else if (this.mode === 'create') this.drawCreate();
     else if (this.mode === 'settings') this.drawSettings();
     else this.drawCredits();
@@ -67,7 +70,7 @@ export class TitleScene extends Phaser.Scene {
       stroke: '#140e0a',
       strokeThickness: 8,
     }).setOrigin(0.5).setResolution(2);
-    this.add.text(W / 2, 214, 'v0.13', {
+    this.add.text(W / 2, 214, 'v0.14', {
       fontFamily: FONT,
       fontStyle: 'italic',
       fontSize: '28px',
@@ -84,24 +87,67 @@ export class TitleScene extends Phaser.Scene {
     this.button(W / 2 - 180, 580, 360, 56, 'Credits', 'credits');
   }
 
-  private drawCreate(): void {
-    this.add.text(96, 48, 'The new detective', {
+  private drawPick(): void {
+    this.add.text(W / 2, 36, 'Choose a detective', {
       fontFamily: DISPLAY,
       fontSize: '36px',
       color: '#e6c98a',
+    }).setOrigin(0.5, 0).setResolution(2);
+    DETECTIVES.forEach((row, index) => {
+      const x = 28 + index * 250;
+      paintPortrait(this, {
+        name: row.defaultName,
+        detective: row.id,
+        coat: 'tan',
+        hat: 'brown',
+        scarf: 'plaid',
+        tone: 'sarcastic',
+      }, `bust-${row.id}`);
+      const g = this.add.graphics();
+      g.fillStyle(0x140e0a, 0.55);
+      g.fillRoundedRect(x, 88, 236, 500, 12);
+      g.lineStyle(2, 0xc6a15a, 1);
+      g.strokeRoundedRect(x, 88, 236, 500, 12);
+      this.add.image(x + 118, 430, `bust-${row.id}`).setOrigin(0.5, 1).setScale(0.28);
+      this.add.text(x + 118, 448, row.label, {
+        fontFamily: DISPLAY,
+        fontSize: '18px',
+        color: '#f6edd6',
+        align: 'center',
+        wordWrap: { width: 210 },
+      }).setOrigin(0.5, 0).setResolution(2);
+      this.add.text(x + 118, 500, row.blurb, {
+        fontFamily: FONT,
+        fontStyle: 'italic',
+        fontSize: '16px',
+        color: '#f3e6c8',
+        align: 'center',
+        wordWrap: { width: 210 },
+      }).setOrigin(0.5, 0).setResolution(2);
+      this.hits.push({ id: `who:${row.id}`, x, y: 88, w: 236, h: 500 });
+    });
+    this.button(W / 2 - 140, 620, 280, 52, 'Back', 'back');
+  }
+
+  private drawCreate(): void {
+    const who = detectiveById(this.detective);
+    this.add.text(96, 36, who.label, {
+      fontFamily: DISPLAY,
+      fontSize: '32px',
+      color: '#e6c98a',
     }).setResolution(2);
     this.add.text(500, 78, 'Name', { fontFamily: DISPLAY, fontSize: '20px', color: '#f3e6c8' }).setResolution(2);
-    paintHero(this, { name: 'Detective', coat: this.coat, hat: this.hat, scarf: this.scarf, tone: this.tone });
-    this.add.image(250, 640, 'hero').setOrigin(0.5, 1).setScale(0.42);
-    this.row(500, 210, 'Coat', COATS, this.coat, 'coat');
-    this.row(500, 300, 'Hat', HATS, this.hat, 'hat');
-    this.row(500, 390, 'Scarf', SCARVES, this.scarf, 'scarf');
-    this.add.text(500, 470, 'Tone', { fontFamily: DISPLAY, fontSize: '20px', color: '#f3e6c8' }).setResolution(2);
+    paintHero(this, { name: who.defaultName, detective: this.detective, coat: this.coat, hat: this.hat, scarf: this.scarf, tone: this.tone });
+    this.add.image(250, 640, 'hero').setOrigin(0.5, 1).setScale(0.4);
+    this.row(500, 200, who.coat, who.coats, this.coat, 'coat');
+    this.row(500, 290, who.hat, who.hats, this.hat, 'hat');
+    this.row(500, 380, who.scarf, who.scarves, this.scarf, 'scarf');
+    this.add.text(500, 460, 'Tone', { fontFamily: DISPLAY, fontSize: '20px', color: '#f3e6c8' }).setResolution(2);
     TONES.forEach((option, index) => {
-      this.button(500 + index * 210, 500, 196, 48, option.label, `tone:${option.id}`, true, this.tone === option.id);
+      this.button(500 + index * 210, 490, 196, 48, option.label, `tone:${option.id}`, true, this.tone === option.id);
     });
-    this.button(500, 590, 200, 56, 'Begin', 'begin');
-    this.button(740, 590, 200, 56, 'Back', 'back');
+    this.button(500, 580, 200, 56, 'Begin', 'begin');
+    this.button(740, 580, 200, 56, 'Back', 'back');
   }
 
   private drawSettings(): void {
@@ -115,7 +161,7 @@ export class TitleScene extends Phaser.Scene {
     TONES.forEach((option, index) => {
       this.button(220 + index * 220, 380, 200, 48, option.label, `tone:${option.id}`, true, this.settings.tone === option.id);
     });
-    this.add.text(W / 2, 480, 'Sound is synthesised in the browser. Vibration is silent on devices that do not support it.\nReduce effects turns off the shake and the lamp flicker.', {
+    this.add.text(W / 2, 480, 'Rain and music are recorded loops. They duck while someone is talking.\nVibration is silent on devices that do not support it. Reduce effects turns off the shake.', {
       fontFamily: FONT,
       fontStyle: 'italic',
       fontSize: '22px',
@@ -128,7 +174,7 @@ export class TitleScene extends Phaser.Scene {
 
   private drawCredits(): void {
     this.add.text(W / 2, 140, 'Credits', { fontFamily: DISPLAY, fontSize: '48px', color: '#e6c98a' }).setOrigin(0.5).setResolution(2);
-    this.add.text(W / 2, 280, 'Music and effects are synthesised with the Web Audio API.\nNo recordings were borrowed.\n\nCinzel and Cormorant Garamond, via Fontsource.\n\nRooms, ghosts, and the detective are original art.', {
+    this.add.text(W / 2, 300, 'Rain by Ylmir, CC0. "Comfortable Mystery" by Kevin MacLeod, CC BY 4.0.\nFootsteps by swuing, via congusbongus, CC BY 3.0.\nEffects by rubberduck, CC0. Dog bark by Brandon Morris, CC0.\n\nCinzel and Cormorant Garamond, via Fontsource.\nRooms, ghosts, and the detectives are original art.\nNames Sara Lind and Skuggi are placeholders in one config file.', {
       fontFamily: FONT,
       fontSize: '28px',
       color: '#f6edd6',
@@ -138,7 +184,7 @@ export class TitleScene extends Phaser.Scene {
     this.button(W / 2 - 140, 560, 280, 56, 'Back', 'back');
   }
 
-  private row(x: number, y: number, label: string, options: readonly { id: string; label: string; color: string }[], current: string, prefix: string): void {
+  private row(x: number, y: number, label: string, options: readonly { id: string; label: string }[], current: string, prefix: string): void {
     this.add.text(x, y - 28, label, { fontFamily: DISPLAY, fontSize: '20px', color: '#f3e6c8' }).setResolution(2);
     options.forEach((option, index) => {
       this.button(x + (index % 4) * 180, y, 168, 48, option.label, `${prefix}:${option.id}`, true, option.id === current);
@@ -196,14 +242,23 @@ export class TitleScene extends Phaser.Scene {
     const w = this.world(p);
     const hit = this.hits.find((box) => w.x >= box.x && w.y >= box.y && w.x <= box.x + box.w && w.y <= box.y + box.h);
     if (!hit) return;
-    if (hit.id === 'new') this.mode = 'create';
+    if (hit.id === 'new') this.mode = 'pick';
     else if (hit.id === 'continue' && hasContinue()) {
       hideCreatorField();
       this.scene.start('adventure');
       return;
     } else if (hit.id === 'settings') this.mode = 'settings';
     else if (hit.id === 'credits') this.mode = 'credits';
-    else if (hit.id === 'back') this.mode = 'title';
+    else if (hit.id === 'back') this.mode = this.mode === 'create' ? 'pick' : 'title';
+    else if (hit.id.startsWith('who:')) {
+      this.detective = detectiveById(hit.id.slice(4)).id;
+      this.coat = 'tan';
+      this.hat = 'brown';
+      this.scarf = 'plaid';
+      const input = document.getElementById('creator-name') as HTMLInputElement | null;
+      if (input) input.value = detectiveById(this.detective).defaultName;
+      this.mode = 'create';
+    }
     else if (hit.id === 'mute') {
       this.settings = { ...this.settings, mute: !this.settings.mute };
       writeSettings(this.settings);
@@ -230,7 +285,8 @@ export class TitleScene extends Phaser.Scene {
       const input = document.getElementById('creator-name') as HTMLInputElement | null;
       const save = freshSave();
       save.started = true;
-      save.name = cleanName(input?.value ?? '');
+      save.name = cleanName(input?.value || detectiveById(this.detective).defaultName);
+      save.detective = this.detective;
       save.coat = this.coat;
       save.hat = this.hat;
       save.scarf = this.scarf;

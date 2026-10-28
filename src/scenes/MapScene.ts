@@ -11,6 +11,7 @@ type Spot = { id: 'shop' | 'lantern' | 'office'; x: number; y: number; label: st
 export class MapScene extends Phaser.Scene {
   private save!: Save;
   private spots: Spot[] = [];
+  private chosen = false;
 
   constructor() {
     super('map');
@@ -18,6 +19,7 @@ export class MapScene extends Phaser.Scene {
 
   create(): void {
     window.__screen = 'map';
+    this.chosen = false;
     this.save = loadSave();
     if (this.save.flags.seenEnding) this.save.cases.lantern = true;
     writeSave(this.save);
@@ -64,9 +66,18 @@ export class MapScene extends Phaser.Scene {
       }).setOrigin(0.5, 1).setResolution(2);
     }
     this.button(36, H - 72, 200, 48, 'Back');
-    this.input.once('pointerdown', () => undefined);
-    this.input.on('pointerup', (p: Phaser.Input.Pointer) => this.onUp(p));
+    this.input.off('pointerup', this.onPointer, this);
+    this.input.on('pointerup', this.onPointer, this);
+    this.events.once('shutdown', () => {
+      this.input.off('pointerup', this.onPointer, this);
+      this.time.removeAllEvents();
+      this.tweens.killAll();
+    });
   }
+
+  private readonly onPointer = (p: Phaser.Input.Pointer): void => {
+    this.onUp(p);
+  };
 
   private button(x: number, y: number, w: number, h: number, label: string): void {
     const g = this.add.graphics();
@@ -82,14 +93,17 @@ export class MapScene extends Phaser.Scene {
   }
 
   private onUp(p: Phaser.Input.Pointer): void {
+    if (this.chosen || !this.scene.isActive()) return;
     const x = p.worldX;
     const y = p.worldY;
     if (x >= 36 && x <= 236 && y >= H - 72 && y <= H - 24) {
+      this.chosen = true;
       this.scene.start('adventure');
       return;
     }
     const hit = this.spots.find((spot) => spot.open && Math.hypot(spot.x - x, spot.y - y) < 48);
     if (!hit || hit.id === 'office') return;
+    this.chosen = true;
     this.scene.start('street', { dest: hit.id });
   }
 }
