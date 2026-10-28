@@ -1,114 +1,129 @@
 import type Phaser from 'phaser';
 import { isDefaultLook, type Profile } from './profile';
 
-const hex = (color: string): [number, number, number] => [
-  parseInt(color.slice(1, 3), 16),
-  parseInt(color.slice(3, 5), 16),
-  parseInt(color.slice(5, 7), 16),
-];
+const COAT: Record<string, [number, number, number]> = {
+  tan: [141, 115, 72],
+  olive: [92, 104, 64],
+  charcoal: [74, 70, 66],
+  wine: [122, 58, 72],
+};
 
-function paint(source: CanvasImageSource, width: number, height: number, profile: Profile, colors: { coat: string; hat: string; scarf: string }): HTMLCanvasElement {
+const HAT: Record<string, [number, number, number]> = {
+  brown: [90, 64, 48],
+  black: [44, 40, 36],
+  moss: [62, 74, 50],
+  plum: [74, 40, 56],
+};
+
+const SCARF: Record<string, [number, number, number]> = {
+  plaid: [138, 48, 48],
+  pine: [47, 90, 64],
+  gold: [160, 120, 48],
+  ink: [42, 64, 104],
+};
+
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = 0;
+  if (max === rn) h = ((gn - bn) / d) % 6;
+  else if (max === gn) h = (bn - rn) / d + 2;
+  else h = (rn - gn) / d + 4;
+  return [h / 6, s, l];
+}
+
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  const hue = (t: number) => {
+    let x = t;
+    if (x < 0) x += 1;
+    if (x > 1) x -= 1;
+    if (x < 1 / 6) return p + (q - p) * 6 * x;
+    if (x < 1 / 2) return q;
+    if (x < 2 / 3) return p + (q - p) * (2 / 3 - x) * 6;
+    return p;
+  };
+  if (s <= 0) {
+    const v = Math.round(l * 255);
+    return [v, v, v];
+  }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  return [Math.round(hue(h + 1 / 3) * 255), Math.round(hue(h) * 255), Math.round(hue(h - 1 / 3) * 255)];
+}
+
+/** Keep the pixel's lightness, take the garment hue, and blend saturation so folds stay folds. */
+function shift(r: number, g: number, b: number, target: [number, number, number]): [number, number, number] {
+  const [, ss, sl] = rgbToHsl(r, g, b);
+  const [th, ts] = rgbToHsl(target[0], target[1], target[2]);
+  const sat = Math.min(1, ts * (0.55 + 0.55 * Math.min(1, ss + 0.15)));
+  return hslToRgb(th, sat, sl);
+}
+
+function paint(
+  source: CanvasImageSource,
+  mask: CanvasImageSource | null,
+  width: number,
+  height: number,
+  profile: Profile,
+): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return canvas;
   ctx.drawImage(source, 0, 0);
-  if (isDefaultLook(profile)) return canvas;
+  if (!mask || isDefaultLook(profile)) return canvas;
   const image = ctx.getImageData(0, 0, width, height);
+  const scratch = document.createElement('canvas');
+  scratch.width = width;
+  scratch.height = height;
+  const mctx = scratch.getContext('2d', { willReadFrequently: true });
+  if (!mctx) return canvas;
+  mctx.drawImage(mask, 0, 0, width, height);
+  const md = mctx.getImageData(0, 0, width, height).data;
   const d = image.data;
-  let y0 = height;
-  let y1 = 0;
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      if (d[(y * width + x) * 4 + 3]! > 40) {
-        y0 = Math.min(y0, y);
-        y1 = Math.max(y1, y);
-      }
-    }
-  }
-  const span = Math.max(1, y1 - y0);
-  const coat = hex(colors.coat);
-  const hat = hex(colors.hat);
-  const scarf = hex(colors.scarf);
-  const tint = (i: number, target: [number, number, number]) => {
-    const r = d[i] ?? 0;
-    const g = d[i + 1] ?? 0;
-    const b = d[i + 2] ?? 0;
-    const lum = 0.35 * r + 0.5 * g + 0.15 * b;
-    const tl = Math.max(1, 0.35 * target[0] + 0.5 * target[1] + 0.15 * target[2]);
-    const scale = lum / tl;
-    d[i] = Math.max(0, Math.min(255, target[0] * scale));
-    d[i + 1] = Math.max(0, Math.min(255, target[1] * scale));
-    d[i + 2] = Math.max(0, Math.min(255, target[2] * scale));
-  };
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const i = (y * width + x) * 4;
-      const r = d[i] ?? 0;
-      const g = d[i + 1] ?? 0;
-      const b = d[i + 2] ?? 0;
-      const a = d[i + 3] ?? 0;
-      if (a < 40) continue;
-      const lantern = r > 170 && g > 100 && b < 140 && r + g > 320;
-      if (lantern) continue;
-      const skin = r > 155 && g > 120 && b > 90 && Math.abs(r - g) < 55 && r > b && y > y0 + 0.12 * span && y < y0 + 0.34 * span;
-      if (skin) continue;
-      const skinHere = y > y0 + 0.1 * span && y < y0 + 0.36 * span && r > 140 && g > 90 && b > 70 && r > b && Math.abs(r - g) < 80;
-      const scarfHere =
-        profile.scarf !== 'plaid' &&
-        !skinHere &&
-        y > y0 + 0.2 * span &&
-        y < y0 + 0.42 * span &&
-        x > width * 0.3 &&
-        x < width * 0.62 &&
-        r > 40;
-      const hatHere = profile.hat !== 'brown' && y < y0 + 0.17 * span && !skinHere && r < 170;
-      const coatHere =
-        profile.coat !== 'tan' &&
-        !scarfHere &&
-        !skinHere &&
-        r > b + 18 &&
-        r > 60 &&
-        g > 35 &&
-        y > y0 + 0.26 * span &&
-        y < y0 + 0.93 * span &&
-        lumOf(r, g, b) > 42;
-      if (scarfHere) tint(i, scarf);
-      else if (hatHere) tint(i, hat);
-      else if (coatHere) tint(i, coat);
-    }
+  const coat = COAT[profile.coat] ?? COAT.tan!;
+  const hat = HAT[profile.hat] ?? HAT.brown!;
+  const scarf = SCARF[profile.scarf] ?? SCARF.plaid!;
+  for (let i = 0; i < d.length; i += 4) {
+    if ((d[i + 3] ?? 0) < 40) continue;
+    if ((md[i + 3] ?? 0) < 20) continue;
+    const mr = md[i] ?? 0;
+    const mg = md[i + 1] ?? 0;
+    const mb = md[i + 2] ?? 0;
+    let target: [number, number, number] | null = null;
+    if (mr > 128) target = hat;
+    else if (mg > 128) target = coat;
+    else if (mb > 128) target = scarf;
+    if (!target) continue;
+    const next = shift(d[i] ?? 0, d[i + 1] ?? 0, d[i + 2] ?? 0, target);
+    d[i] = next[0];
+    d[i + 1] = next[1];
+    d[i + 2] = next[2];
   }
   ctx.putImageData(image, 0, 0);
   return canvas;
 }
 
-function lumOf(r: number, g: number, b: number): number {
-  return 0.35 * r + 0.5 * g + 0.15 * b;
-}
-
-function colorsFor(profile: Profile): { coat: string; hat: string; scarf: string } {
-  const coats: Record<string, string> = { tan: '#8d7348', olive: '#5c6840', charcoal: '#4a4642', wine: '#7a3a48' };
-  const hats: Record<string, string> = { brown: '#5a4030', black: '#2c2824', moss: '#3e4a32', plum: '#4a2838' };
-  const scarves: Record<string, string> = { plaid: '#8a3030', pine: '#2f5a40', gold: '#a07830', ink: '#2a4068' };
-  return {
-    coat: coats[profile.coat] ?? '#8d7348',
-    hat: hats[profile.hat] ?? '#5a4030',
-    scarf: scarves[profile.scarf] ?? '#8a3030',
-  };
-}
-
-function put(scene: Phaser.Scene, key: string, sourceKey: string, profile: Profile): void {
+function put(scene: Phaser.Scene, key: string, sourceKey: string, maskKey: string, profile: Profile): void {
   const texture = scene.textures.get(sourceKey);
   const image = texture.getSourceImage() as HTMLImageElement;
-  const canvas = paint(image, image.width, image.height, profile, colorsFor(profile));
+  const mask = scene.textures.exists(maskKey) ? (scene.textures.get(maskKey).getSourceImage() as CanvasImageSource) : null;
+  const canvas = paint(image, mask, image.width, image.height, profile);
   if (scene.textures.exists(key)) scene.textures.remove(key);
   scene.textures.addCanvas(key, canvas);
 }
 
 export function paintHero(scene: Phaser.Scene, profile: Profile): void {
-  put(scene, 'hero', 'detective', profile);
-  for (let i = 0; i < 6; i++) put(scene, `hero-${i}`, `walk-${i}`, profile);
+  put(scene, 'hero', 'detective', 'mask-detective', profile);
+  for (let i = 0; i < 6; i++) put(scene, `hero-${i}`, `walk-${i}`, `mask-walk-${i}`, profile);
 }
 
 export function idleKey(profile: Profile): string {

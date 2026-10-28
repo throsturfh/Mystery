@@ -1,3 +1,4 @@
+import type { Tone } from './profile';
 import type { ItemId } from './save';
 
 const LOOKS: Record<string, string[]> = {
@@ -233,26 +234,121 @@ const USES: Record<string, string> = {
   'lantern:dark': 'Wave it all you like. The wick wants a match, not a speech.',
 };
 
+const WARM: Record<string, string[]> = {
+  edith: [
+    'Edith Crane. She keeps the tea hot and the dead on a schedule.',
+    'She has already made a file for you. It is kinder than it looks.',
+    'Edith does not haunt. She looks after people, which is rarer.',
+  ],
+  june: [
+    'June Bellweather. She is tired, and she is still here, which is a kind of courage.',
+    'She inherited a shop and a grandfather who missed the door.',
+    'June will come around. The rain already has.',
+  ],
+  ambrose: [
+    'Ambrose Bellweather. He stayed to finish the shelving. Love looks like that, sometimes.',
+    'He holds the book as if it were a letter he meant to send.',
+    'A bookseller who wanted June to get home safe. That is the whole haunting.',
+  ],
+  shelf: [
+    'A gap on the second shelf, just the size of one slim green book.',
+    'The poets are keeping the place warm for whoever comes back.',
+    'Something precious stood here. It can stand here again.',
+  ],
+  doorbell: [
+    'The doorbell. It rings when Ambrose wants to know June is home.',
+    'June flinches at the bell. She is right to. It means she is loved loudly.',
+    'If it rings for nobody, the nobody is Ambrose, checking the lock.',
+  ],
+  phone: [
+    'A rotary phone. Edith uses it when she is worried, which is often.',
+    'The cord is tangled. Someone has been pacing.',
+    'If it rings, Edith has already thought of you.',
+  ],
+};
+
+const DRAMATIC: Record<string, string[]> = {
+  edith: [
+    'Edith Crane. Dispatch itself, poured into a woman and a teacup.',
+    'She has judged empires. Your coat is merely the latest.',
+    'Edith does not haunt. The night reports to her.',
+  ],
+  june: [
+    'June Bellweather, last keeper of a shop the dead refuse to leave.',
+    'She holds the keys the way a sentry holds a gate.',
+    'June does not believe in you yet. The storm is still making its case.',
+  ],
+  ambrose: [
+    'Ambrose Bellweather. A receipt that learned how to linger.',
+    'He holds a book the way a king holds a surrendered city: gently.',
+    'A bookseller who would not abandon the last page.',
+  ],
+  shelf: [
+    'A wound in the second shelf, the exact shape of a slim green book.',
+    'The poets look away. Even verse knows a grave when it sees one.',
+    'Something was taken from this place, and the place remembers.',
+  ],
+  doorbell: [
+    'The doorbell. It tolls for pavements that only look empty.',
+    'June hates this bell. The bell is a heartbeat she cannot bury.',
+    'If it rings for nobody, the nobody is Ambrose, keeping watch.',
+  ],
+  phone: [
+    'A rotary phone. It rings like a verdict.',
+    'The cord is a knot of every night Edith stayed late.',
+    'Answer, if you dare. Edith already knows the ending.',
+  ],
+};
+
+const WARM_FALLBACK = [
+  'That does not help. The shop is patient about it.',
+  'Not quite. There is a kinder way through.',
+  'A good thought. The room needs a different one.',
+  'Nothing happens. The nothing is gentle about it.',
+  'Edith would call that a near miss, and mean it fondly.',
+  'The objects decline, without any unkindness.',
+  'Somewhere a ghost smiles, and waits.',
+  'That is not the way. The way is still here.',
+  'Try again. The house is on your side.',
+  'Two things meet and decide to remain themselves.',
+];
+
+const DRAMATIC_FALLBACK = [
+  'The house refuses. The refusal echoes.',
+  'No. And the no has a weight to it.',
+  'That path is shut. The dark says so.',
+  'A bold stroke. The century does not flinch.',
+  'If that worked, the dead would sit up. They do not.',
+  'The objects consider your plea and return it sealed.',
+  'Somewhere a ghost turns its face away.',
+  'That is not a word this building will speak.',
+  'You could insist. The night would still win.',
+  'The lantern watches, and keeps its counsel.',
+];
+
 let fallbackCursor = 0;
 
-export function lookLine(id: string, fallback: string, times: number): string {
-  const lines = LOOKS[id];
+export function lookLine(id: string, fallback: string, times: number, tone: Tone = 'sarcastic'): string {
+  const voiced = tone === 'warm' ? WARM[id] : tone === 'dramatic' ? DRAMATIC[id] : undefined;
+  const lines = voiced && voiced.length > 0 ? voiced : LOOKS[id];
   if (!lines || lines.length === 0) return fallback;
   return lines[times % lines.length] ?? fallback;
 }
 
-export function pairLine(a: ItemId, b: ItemId): string {
+export function pairLine(a: ItemId, b: ItemId, tone: Tone = 'sarcastic'): string {
+  if (tone !== 'sarcastic') return nextFallback(tone);
   const pair = new Set([a, b]);
   const found = PAIRS.find(([x, y]) => pair.has(x) && pair.has(y));
-  return found ? found[2] : nextFallback();
+  return found ? found[2] : nextFallback(tone);
 }
 
-export function useLine(item: ItemId, spotId: string): string {
-  return USES[`${item}:${spotId}`] ?? nextFallback();
+export function useLine(item: ItemId, spotId: string, tone: Tone = 'sarcastic'): string {
+  return USES[`${item}:${spotId}`] ?? nextFallback(tone);
 }
 
-export function nextFallback(): string {
-  const line = FALLBACK[fallbackCursor % FALLBACK.length] ?? FALLBACK[0]!;
+export function nextFallback(tone: Tone = 'sarcastic'): string {
+  const pool = tone === 'warm' ? WARM_FALLBACK : tone === 'dramatic' ? DRAMATIC_FALLBACK : FALLBACK;
+  const line = pool[fallbackCursor % pool.length] ?? pool[0]!;
   fallbackCursor += 1;
   return line;
 }

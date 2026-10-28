@@ -1,7 +1,20 @@
 import type { RoomId } from './save';
 import { loadSettings, type Settings } from './settings';
 
-export type SfxName = 'foot' | 'bell' | 'pickup' | 'ok' | 'fail' | 'door' | 'lantern' | 'ghost' | 'blip' | 'closed';
+export type SfxName =
+  | 'foot'
+  | 'bell'
+  | 'pickup'
+  | 'ok'
+  | 'fail'
+  | 'door'
+  | 'lantern'
+  | 'ghost'
+  | 'blip'
+  | 'closed'
+  | 'moth'
+  | 'whisper'
+  | 'lanternToggle';
 
 type Area = 'office' | 'shop' | 'stock';
 
@@ -41,22 +54,31 @@ export class AudioBus {
     this.setAmbientGains();
   }
 
-  play(name: SfxName): void {
+  play(name: SfxName, pan = 0): void {
     const ctx = this.ac();
     if (!ctx || !this.sfxGain || this.settings.mute || this.settings.sfx <= 0.001) return;
     this.ensureGraph();
-    if (name === 'blip') this.tone(610, 0.05, 'triangle', 0.05);
-    else if (name === 'foot') this.noise(0.045, 180, 0.08);
-    else if (name === 'bell') this.chime([880, 1320, 1760], 0.35, 0.07);
-    else if (name === 'pickup') this.chime([520, 780], 0.18, 0.06);
-    else if (name === 'ok') this.chime([440, 660, 880], 0.28, 0.07);
-    else if (name === 'fail') this.tone(180, 0.16, 'sawtooth', 0.04);
-    else if (name === 'door') this.noise(0.18, 90, 0.12);
+    const panner = this.panner(pan);
+    if (name === 'blip') this.tone(610, 0.05, 'triangle', 0.05, panner);
+    else if (name === 'foot') this.noise(0.045, 180, 0.08, panner);
+    else if (name === 'bell') this.chime([880, 1320, 1760], 0.35, 0.07, panner);
+    else if (name === 'pickup') this.chime([520, 780], 0.18, 0.06, panner);
+    else if (name === 'ok') this.chime([440, 660, 880], 0.28, 0.07, panner);
+    else if (name === 'fail') this.tone(180, 0.16, 'sawtooth', 0.04, panner);
+    else if (name === 'door') this.noise(0.18, 90, 0.12, panner);
     else if (name === 'lantern') {
-      this.noise(0.22, 400, 0.1);
-      this.tone(320, 0.3, 'triangle', 0.04);
-    } else if (name === 'ghost') this.chime([660, 990, 1320], 0.7, 0.05);
-    else if (name === 'closed') this.chime([392, 494, 587, 784], 0.9, 0.06);
+      this.noise(0.22, 400, 0.1, panner);
+      this.tone(320, 0.3, 'triangle', 0.04, panner);
+    } else if (name === 'lanternToggle') this.tone(240, 0.08, 'square', 0.03, panner);
+    else if (name === 'moth') {
+      this.tone(880, 0.12, 'sine', 0.04, panner);
+      this.tone(1320, 0.08, 'triangle', 0.03, panner);
+      this.noise(0.1, 2400, 0.04, panner);
+    } else if (name === 'whisper') {
+      this.tone(420, 0.45, 'sine', 0.03, panner);
+      this.noise(0.4, 700, 0.04, panner);
+    } else if (name === 'ghost') this.chime([660, 990, 1320], 0.7, 0.05, panner);
+    else if (name === 'closed') this.chime([392, 494, 587, 784], 0.9, 0.06, panner);
   }
 
   blip(freq = 540, dur = 0.06, gain = 0.04): void {
@@ -132,6 +154,17 @@ export class AudioBus {
     this.applySettings();
   }
 
+  private panner(pan: number): AudioNode | null {
+    const ctx = this.ac();
+    if (!ctx || !this.sfxGain) return this.sfxGain;
+    const amount = Math.max(-1, Math.min(1, pan));
+    if (Math.abs(amount) < 0.05) return this.sfxGain;
+    const node = ctx.createStereoPanner();
+    node.pan.value = amount;
+    node.connect(this.sfxGain);
+    return node;
+  }
+
   private tone(freq: number, dur: number, type: OscillatorType, gain: number, dest?: AudioNode | null): void {
     const ctx = this.ac();
     const out = dest ?? this.sfxGain;
@@ -147,9 +180,10 @@ export class AudioBus {
     osc.stop(ctx.currentTime + dur + 0.02);
   }
 
-  private noise(dur: number, freq: number, gain: number): void {
+  private noise(dur: number, freq: number, gain: number, dest?: AudioNode | null): void {
     const ctx = this.ac();
-    if (!ctx || !this.sfxGain) return;
+    const out = dest ?? this.sfxGain;
+    if (!ctx || !out) return;
     const length = Math.floor(ctx.sampleRate * dur);
     const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
     const data = buffer.getChannelData(0);
@@ -161,12 +195,12 @@ export class AudioBus {
     filter.frequency.value = freq;
     const amp = ctx.createGain();
     amp.gain.value = gain;
-    src.connect(filter).connect(amp).connect(this.sfxGain);
+    src.connect(filter).connect(amp).connect(out);
     src.start();
   }
 
-  private chime(freqs: number[], dur: number, gain: number): void {
-    freqs.forEach((freq, index) => this.tone(freq, dur, 'sine', gain / (index + 1)));
+  private chime(freqs: number[], dur: number, gain: number, dest?: AudioNode | null): void {
+    freqs.forEach((freq, index) => this.tone(freq, dur, 'sine', gain / (index + 1), dest));
   }
 
   private ac(): AudioContext | null {

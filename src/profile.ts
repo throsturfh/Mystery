@@ -1,11 +1,11 @@
-export type Pronouns = 'they' | 'he' | 'she';
+export type Tone = 'sarcastic' | 'warm' | 'dramatic';
 
 export type Profile = {
   name: string;
-  pronouns: Pronouns;
   coat: string;
   hat: string;
   scarf: string;
+  tone: Tone;
 };
 
 export const COATS = [
@@ -29,33 +29,31 @@ export const SCARVES = [
   { id: 'ink', label: 'Ink', color: '#2a4068' },
 ] as const;
 
+export const TONES: { id: Tone; label: string }[] = [
+  { id: 'sarcastic', label: 'Sarcastic' },
+  { id: 'warm', label: 'Warm' },
+  { id: 'dramatic', label: 'Dramatic' },
+];
+
 export const DEFAULT_PROFILE: Profile = {
   name: 'Detective',
-  pronouns: 'they',
   coat: 'tan',
   hat: 'brown',
   scarf: 'plaid',
+  tone: 'sarcastic',
 };
+
+const TONE_SET = new Set<Tone>(['sarcastic', 'warm', 'dramatic']);
 
 export function cleanName(raw: string): string {
   const trimmed = raw.replace(/\s+/g, ' ').trim().slice(0, 16);
   return trimmed || DEFAULT_PROFILE.name;
 }
 
-export function isDefaultLook(profile: Profile): boolean {
-  return profile.coat === 'tan' && profile.hat === 'brown' && profile.scarf === 'plaid';
+export function cleanTone(raw: unknown): Tone {
+  return TONE_SET.has(raw as Tone) ? (raw as Tone) : 'sarcastic';
 }
 
-export type Grammar = {
-  subj: string;
-  obj: string;
-  poss: string;
-  be: string;
-  Subj: string;
-};
-
-export function grammar(pronouns: Pronouns): Grammar {
-  if (pronouns === 'he') return { subj: 'he', obj: 'him', poss: 'his', be: 'is', Subj: 'He' };
-  if (pronouns === 'she') return { subj: 'she', obj: 'her', poss: 'her', be: 'is', Subj: 'She' };
-  return { subj: 'they', obj: 'them', poss: 'their', be: 'are', Subj: 'They' };
+export function isDefaultLook(profile: Profile): boolean {
+  return profile.coat === 'tan' && profile.hat === 'brown' && profile.scarf === 'plaid';
 }

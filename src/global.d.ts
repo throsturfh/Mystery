@@ -15,6 +15,11 @@ declare global {
       busy: boolean;
       dark: boolean;
       envelope: boolean;
+      nameField: boolean;
+      spirit: boolean;
+      moths: number;
+      tone: string;
+      june: { x: number; y: number; flip: boolean } | null;
     };
   }
 }

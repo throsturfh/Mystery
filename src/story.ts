@@ -1,5 +1,5 @@
 import type { Pt } from './geom';
-import { grammar, type Profile } from './profile';
+import type { Profile, Tone } from './profile';
 import { pairLine, useLine } from './quips';
 import type { Flag, ItemId, RoomId, Save, Speaker } from './save';
 
@@ -51,9 +51,33 @@ export interface Ctx {
   revealRoom(): void;
   wait(ms: number): Promise<void>;
   profile(): Profile;
+  tone(): Tone;
   quip(id: string, fallback: string): string;
-  sfx(name: string): void;
+  sfx(name: string, pan?: number): void;
+  face(who: 'edith' | 'june' | 'ambrose'): Promise<void>;
   card(): Promise<void>;
+}
+
+export type MothSpec = { id: string; room: RoomId; x: number; y: number; hidden: boolean };
+
+/** Two or three a room. Hidden moths only show under the spirit lantern. None of them gate the case. */
+export const MOTHS: MothSpec[] = [
+  { id: 'office-lamp', room: 'office', x: 990, y: 250, hidden: false },
+  { id: 'office-rain', room: 'office', x: 300, y: 180, hidden: true },
+  { id: 'office-board', room: 'office', x: 640, y: 150, hidden: false },
+  { id: 'shop-bell', room: 'shop', x: 180, y: 130, hidden: false },
+  { id: 'shop-shelf', room: 'shop', x: 400, y: 160, hidden: true },
+  { id: 'shop-lamp', room: 'shop', x: 1100, y: 220, hidden: false },
+  { id: 'nook-moon', room: 'nook', x: 500, y: 140, hidden: true },
+  { id: 'nook-case', room: 'nook', x: 900, y: 180, hidden: false },
+  { id: 'nook-chair', room: 'nook', x: 280, y: 250, hidden: false },
+  { id: 'stock-web', room: 'stock', x: 560, y: 160, hidden: true },
+  { id: 'stock-moon', room: 'stock', x: 470, y: 90, hidden: false },
+  { id: 'stock-crate', room: 'stock', x: 640, y: 400, hidden: true },
+];
+
+function byTone(tone: Tone, lines: Record<Tone, string>): string {
+  return lines[tone];
 }
 
 /** Open floor in front of the furniture. Back edge is the far boards, front edge sits just above the inventory. */
@@ -131,6 +155,18 @@ const spot = (
 ): Spot => ({ id, name, x, y, rx, ry, walkX, walkY, face, look, verb, ...extra });
 
 export function spotsFor(save: Save, room: RoomId): Spot[] {
+  const spots = baseSpots(save, room);
+  if (!save.spirit) return spots;
+  const ghost: Record<RoomId, Spot> = {
+    office: spot('spirit-office', 'faint writing', 520, 210, 70, 22, 520, 568, 1, 'Only the spirit lantern holds it: the chair remembers who sat.', 'look'),
+    shop: spot('spirit-shop', 'faint writing', 520, 240, 70, 20, 520, 568, -1, 'On the plaster, barely: between the poets.', 'look'),
+    nook: spot('spirit-nook', 'a breath on the glass', 470, 250, 50, 18, 470, 568, -1, 'The round window says he only wanted the door locked behind June.', 'look'),
+    stock: spot('spirit-stock', 'a name in the dust', 720, 280, 60, 18, 680, 570, 1, 'Dust on the shelf: A. Bellweather, still counting.', 'look'),
+  };
+  return spots.concat(ghost[room]);
+}
+
+function baseSpots(save: Save, room: RoomId): Spot[] {
   const f = save.flags;
   if (room === 'office') {
     return [
@@ -144,11 +180,15 @@ export function spotsFor(save: Save, room: RoomId): Spot[] {
       spot('coat', 'the coat rack', 230, 370, 55, 120, 320, 575, -1, 'Spare coats. None of them have given notice.', 'look'),
       spot('side-door', 'the side door', 1210, 310, 60, 150, 1060, 575, 1, 'A dark doorway. It leads out, which is the polite thing for a doorway to do.', 'exit', { to: 'shop', entry: 'door' }),
       spot('office-door', 'the street', 95, 280, 75, 180, 250, 575, -1, 'The street door. Other people\'s problems live on the far side.', 'exit', { to: 'shop', entry: 'door' }),
+      ...(save.flags.gotKey ? [spot('trophy-key', 'the spare key', 868, 186, 20, 18, 800, 572, 1, 'June\'s spare, kept on the cabinet. It opens a room that is finished now.', 'look')] : []),
+      ...(save.flags.seenEnding ? [spot('trophy-medal', 'the medal', 918, 182, 20, 18, 860, 572, 1, 'A brass star for a shelved ghost. Edith hates how pleased she is.', 'look')] : []),
+      ...(save.moths.length > 0 ? [spot('trophy-jar', 'the moth jar', 968, 184, 20, 18, 920, 572, 1, 'Ghost moths, stopped for a moment in a jar. They were never the case. They were the kindness.', 'look')] : []),
+      ...(save.flags.bookShelved ? [spot('trophy-book', 'the spare copy', 1018, 178, 20, 22, 980, 572, 1, 'A second green book, or the memory of one. The shelf downstairs is the real one.', 'look')] : []),
     ];
   }
   if (room === 'shop') {
     return [
-      spot('pencil', 'the pencil', 860, 400, 60, 22, 860, 572, 1, f.ledgerWritten ? 'The pencil already suffered for literature.' : 'A pencil on the counter. Someone was thinking, or fretting.', 'pencil'),
+      spot('pencil', 'the pencil', 900, 408, 46, 16, 900, 572, 1, f.ledgerWritten ? 'The pencil already suffered for literature.' : 'A chewed pencil on the counter. Someone was thinking, or fretting.', 'pencil'),
       spot('doorbell', 'the doorbell', 130, 150, 28, 24, 250, 562, -1, 'The doorbell. It rings for empty pavements, which is rude even for brass.', 'look'),
       spot('register', 'the cash register', 820, 300, 70, 46, 780, 568, 1, 'The till. It has opinions about being dead, and they are unfavourable.', 'look'),
       spot('daybook', 'the daybook', 960, 338, 55, 22, 920, 568, 1, 'The shop daybook, open on nothing in particular. The real ledger is sulking elsewhere.', 'look'),
@@ -313,6 +353,7 @@ async function openStock(ctx: Ctx): Promise<void> {
 }
 
 export async function talkEdith(ctx: Ctx): Promise<void> {
+  await ctx.face('edith');
   if (!ctx.flag('introDone')) {
     await intro(ctx);
     return;
@@ -330,8 +371,13 @@ export async function talkEdith(ctx: Ctx): Promise<void> {
 
 async function intro(ctx: Ctx): Promise<void> {
   const name = ctx.profile().name;
-  const g = grammar(ctx.profile().pronouns);
-  await ctx.say('edith', `${name}. The chair is only mostly haunted. Sit, or don't.`);
+  const tone = ctx.tone();
+  await ctx.face('edith');
+  await ctx.say('edith', byTone(tone, {
+    sarcastic: `${name}. The chair is only mostly haunted. Sit, or don't.`,
+    warm: `${name}. Come in. The chair is mostly harmless, and the tea is hot.`,
+    dramatic: `${name}. The chair has been waiting. So have I.`,
+  }));
   await ctx.say('edith', 'Case zero. The Bellweather Bookshop. June inherited it from her grandfather, Ambrose.');
   let choice = 0;
   for (;;) {
@@ -346,7 +392,7 @@ async function intro(ctx: Ctx): Promise<void> {
       ],
     );
     if (choice === 1) {
-      await ctx.say('edith', `You may not. The tea has unionised. I file ${name} under ${g.poss} own bad ideas.`);
+      await ctx.say('edith', `You may not. The tea has unionised. I file ${name} under a private heading of bad ideas.`);
       continue;
     }
     break;
@@ -362,7 +408,11 @@ async function intro(ctx: Ctx): Promise<void> {
   ctx.add('lantern');
   ctx.setFlag('introDone', true);
   ctx.refresh();
-  await ctx.say('edith', `Three streets, then the shop. Talk to June before ${g.subj} interview the furniture.`);
+  await ctx.say('edith', byTone(tone, {
+    sarcastic: 'Three streets, then the shop. Talk to June before the furniture gets interviewed.',
+    warm: 'Three streets, then the shop. June is frightened. Be gentle, and be specific.',
+    dramatic: 'Three streets of rain. Then June. Do not let the furniture speak first.',
+  }));
 }
 
 async function ending(ctx: Ctx): Promise<void> {
@@ -377,6 +427,8 @@ async function ending(ctx: Ctx): Promise<void> {
 }
 
 async function talkJune(ctx: Ctx): Promise<void> {
+  await ctx.face('june');
+  const tone = ctx.tone();
   if (ctx.has('key')) {
     if (ctx.flag('bookShelved')) {
       await ctx.say('june', 'The shelf looks right. Don\'t tell me he was pleasant about it.');
@@ -389,7 +441,11 @@ async function talkJune(ctx: Ctx): Promise<void> {
   for (;;) {
     const choice = await ctx.ask(
       'june',
-      'We\'re closed to ghost stories. If the incense is in your bag, the door is behind you.',
+      byTone(tone, {
+        sarcastic: 'We\'re closed to ghost stories. If the incense is in your bag, the door is behind you.',
+        warm: 'We\'re closed. If you are here about the bell, say so plainly. I am tired.',
+        dramatic: 'The shop is shut to ghost stories. Speak, or the door will have you.',
+      }),
       [
         'Edith sent me about the doorbell.',
         'My body is in the umbrella stand.',
@@ -431,12 +487,14 @@ async function talkJune(ctx: Ctx): Promise<void> {
   await ctx.say('june', 'That\'s him. He hates a messy fiction section more than he hates being dead.');
   await ctx.say('june', 'Stockroom key. Don\'t rearrange him. He hates that more.');
   ctx.add('key');
+  ctx.setFlag('gotKey', true);
   ctx.pose('pick');
   ctx.refresh();
 }
 
 export async function talkAmbrose(ctx: Ctx): Promise<void> {
   if (!ctx.flag('ledgerWritten')) {
+    await ctx.face('ambrose');
     await ctx.say('detective', 'The air is polite, and empty.');
     return;
   }
@@ -444,13 +502,20 @@ export async function talkAmbrose(ctx: Ctx): Promise<void> {
 }
 
 export async function ambroseTree(ctx: Ctx): Promise<void> {
+  const tone = ctx.tone();
   if (ctx.flag('ambroseAsked')) {
     ctx.showGhost(true);
+    await ctx.face('ambrose');
     await ctx.say('ambrose', 'The gap on the shop shelf, between the poets. I can wait. I have practice.');
     return;
   }
   ctx.showGhost(true);
-  await ctx.say('ambrose', 'Oh. A customer. I was just closing the account.');
+  await ctx.face('ambrose');
+  await ctx.say('ambrose', byTone(tone, {
+    sarcastic: 'Oh. A customer. I was just closing the account.',
+    warm: 'Oh. You found me. I was only finishing the last line.',
+    dramatic: 'A living customer. I had begun to think the dark was my only patron.',
+  }));
   const choice = await ctx.ask('ambrose', 'One copy, sold to A. Bellweather. I have always been my best patron.', [
     'A receipt for staying. Bold.',
     'June says the till can wait.',
@@ -529,6 +594,7 @@ export async function shelve(ctx: Ctx): Promise<void> {
   ctx.setFlag('ambroseBye', true);
   ctx.showGhost(true);
   ctx.refresh();
+  await ctx.face('ambrose');
   await ctx.say('ambrose', 'There. See? It was never lost. I was.');
   await ctx.say('ambrose', 'Tell June I am sorry about the doorbell. It was only me, checking she got home.');
   await ctx.say('ambrose', "Goodnight, detective. Don't read the last page first. It spoils the haunting.");
@@ -548,7 +614,7 @@ export async function combine(a: ItemId, b: ItemId, ctx: Ctx): Promise<void> {
     return;
   }
   ctx.sfx('fail');
-  await ctx.say('detective', pairLine(a, b));
+  await ctx.say('detective', pairLine(a, b, ctx.tone()));
 }
 
 export async function useItemOn(item: ItemId, spot: Spot, ctx: Ctx): Promise<void> {
@@ -578,5 +644,5 @@ export async function useItemOn(item: ItemId, spot: Spot, ctx: Ctx): Promise<voi
     return;
   }
   ctx.sfx('fail');
-  await ctx.say('detective', useLine(item, spot.id));
+  await ctx.say('detective', useLine(item, spot.id, ctx.tone()));
 }

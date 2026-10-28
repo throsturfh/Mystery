@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import { audio } from '../audio';
 import { H, W } from '../config';
-import { COATS, HATS, SCARVES, cleanName, type Pronouns } from '../profile';
-import { freshSave, hasContinue, writeSave } from '../save';
+import { hideCreatorField, placeCreatorField } from '../creatorDom';
+import { COATS, HATS, SCARVES, TONES, cleanName, cleanTone, type Tone } from '../profile';
+import { freshSave, hasContinue, loadSave, writeSave } from '../save';
 import { loadSettings, writeSettings, type Settings } from '../settings';
 import { paintHero } from '../tint';
 
@@ -18,9 +19,10 @@ export class TitleScene extends Phaser.Scene {
   private coat = 'tan';
   private hat = 'brown';
   private scarf = 'plaid';
-  private pronouns: Pronouns = 'they';
+  private tone: Tone = 'sarcastic';
   private settings: Settings = loadSettings();
   private drag: 'music' | 'sfx' | null = null;
+  private onResize = (): void => this.placeName();
 
   constructor() {
     super('title');
@@ -29,14 +31,19 @@ export class TitleScene extends Phaser.Scene {
   create(): void {
     this.mode = 'title';
     this.settings = loadSettings();
+    this.tone = this.settings.tone;
     audio.unlock();
     audio.ambient('office');
+    hideCreatorField();
     document.getElementById('loading')?.remove();
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onDown(p));
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => this.onUp(p));
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.onMove(p));
-    this.scale.on('resize', () => this.placeName());
-    this.events.once('shutdown', () => this.showName(false));
+    this.scale.on('resize', this.onResize);
+    this.events.once('shutdown', () => {
+      this.scale.off('resize', this.onResize);
+      hideCreatorField();
+    });
     this.draw();
   }
 
@@ -60,7 +67,7 @@ export class TitleScene extends Phaser.Scene {
       stroke: '#140e0a',
       strokeThickness: 8,
     }).setOrigin(0.5).setResolution(2);
-    this.add.text(W / 2, 214, 'v0.11', {
+    this.add.text(W / 2, 214, 'v0.12', {
       fontFamily: FONT,
       fontStyle: 'italic',
       fontSize: '28px',
@@ -83,35 +90,40 @@ export class TitleScene extends Phaser.Scene {
       fontSize: '36px',
       color: '#e6c98a',
     }).setResolution(2);
-    this.add.text(96, 128, 'Name', { fontFamily: DISPLAY, fontSize: '20px', color: '#f3e6c8' }).setResolution(2);
-    paintHero(this, { name: 'Detective', pronouns: this.pronouns, coat: this.coat, hat: this.hat, scarf: this.scarf });
-    const key = 'hero';
-    this.add.image(250, 620, key).setOrigin(0.5, 1).setScale(0.42);
-    this.row(520, 230, 'Coat', COATS, this.coat, 'coat');
-    this.row(520, 320, 'Hat', HATS, this.hat, 'hat');
-    this.row(520, 410, 'Scarf', SCARVES, this.scarf, 'scarf');
-    this.add.text(520, 490, 'Pronouns', { fontFamily: DISPLAY, fontSize: '20px', color: '#f3e6c8' }).setResolution(2);
-    (['they', 'he', 'she'] as Pronouns[]).forEach((id, index) => {
-      this.button(520 + index * 150, 520, 136, 48, id, `pro:${id}`, true, this.pronouns === id);
+    this.add.text(500, 78, 'Name', { fontFamily: DISPLAY, fontSize: '20px', color: '#f3e6c8' }).setResolution(2);
+    paintHero(this, { name: 'Detective', coat: this.coat, hat: this.hat, scarf: this.scarf, tone: this.tone });
+    this.add.image(250, 640, 'hero').setOrigin(0.5, 1).setScale(0.42);
+    this.row(500, 210, 'Coat', COATS, this.coat, 'coat');
+    this.row(500, 300, 'Hat', HATS, this.hat, 'hat');
+    this.row(500, 390, 'Scarf', SCARVES, this.scarf, 'scarf');
+    this.add.text(500, 470, 'Tone', { fontFamily: DISPLAY, fontSize: '20px', color: '#f3e6c8' }).setResolution(2);
+    TONES.forEach((option, index) => {
+      this.button(500 + index * 210, 500, 196, 48, option.label, `tone:${option.id}`, true, this.tone === option.id);
     });
-    this.button(520, 600, 200, 56, 'Begin', 'begin');
-    this.button(760, 600, 200, 56, 'Back', 'back');
+    this.button(500, 590, 200, 56, 'Begin', 'begin');
+    this.button(740, 590, 200, 56, 'Back', 'back');
   }
 
   private drawSettings(): void {
-    this.add.text(W / 2, 120, 'Settings', { fontFamily: DISPLAY, fontSize: '48px', color: '#e6c98a' }).setOrigin(0.5).setResolution(2);
-    this.slider(420, 240, 'Music', this.settings.music, 'music');
-    this.slider(420, 340, 'Effects', this.settings.sfx, 'sfx');
-    this.button(420, 430, 440, 60, this.settings.mute ? 'Sound: muted' : 'Sound: on', 'mute');
-    this.add.text(W / 2, 530, 'Sound is synthesised in the browser. Fonts: Cinzel and Cormorant Garamond.', {
+    this.add.text(W / 2, 70, 'Settings', { fontFamily: DISPLAY, fontSize: '42px', color: '#e6c98a' }).setOrigin(0.5).setResolution(2);
+    this.slider(220, 140, 'Music', this.settings.music, 'music');
+    this.slider(220, 220, 'Effects', this.settings.sfx, 'sfx');
+    this.button(220, 270, 280, 52, this.settings.mute ? 'Sound: muted' : 'Sound: on', 'mute');
+    this.button(520, 270, 280, 52, this.settings.vibration ? 'Vibration: on' : 'Vibration: off', 'vibration');
+    this.button(820, 270, 280, 52, this.settings.reduceEffects ? 'Effects: reduced' : 'Effects: full', 'reduce');
+    this.add.text(220, 350, 'Tone', { fontFamily: DISPLAY, fontSize: '20px', color: '#f3e6c8' }).setResolution(2);
+    TONES.forEach((option, index) => {
+      this.button(220 + index * 220, 380, 200, 48, option.label, `tone:${option.id}`, true, this.settings.tone === option.id);
+    });
+    this.add.text(W / 2, 480, 'Sound is synthesised in the browser. Vibration is silent on devices that do not support it.\nReduce effects turns off the shake and the lamp flicker.', {
       fontFamily: FONT,
       fontStyle: 'italic',
       fontSize: '22px',
       color: '#f3e6c8',
       align: 'center',
-      wordWrap: { width: 680 },
+      wordWrap: { width: 860 },
     }).setOrigin(0.5).setResolution(2);
-    this.button(W / 2 - 140, 600, 280, 56, 'Back', 'back');
+    this.button(W / 2 - 140, 580, 280, 56, 'Back', 'back');
   }
 
   private drawCredits(): void {
@@ -129,7 +141,7 @@ export class TitleScene extends Phaser.Scene {
   private row(x: number, y: number, label: string, options: readonly { id: string; label: string; color: string }[], current: string, prefix: string): void {
     this.add.text(x, y - 28, label, { fontFamily: DISPLAY, fontSize: '20px', color: '#f3e6c8' }).setResolution(2);
     options.forEach((option, index) => {
-      this.button(x + (index % 4) * 160, y, 148, 48, option.label, `${prefix}:${option.id}`, true, option.id === current);
+      this.button(x + (index % 4) * 180, y, 168, 48, option.label, `${prefix}:${option.id}`, true, option.id === current);
     });
   }
 
@@ -186,7 +198,7 @@ export class TitleScene extends Phaser.Scene {
     if (!hit) return;
     if (hit.id === 'new') this.mode = 'create';
     else if (hit.id === 'continue' && hasContinue()) {
-      this.showName(false);
+      hideCreatorField();
       this.scene.start('adventure');
       return;
     } else if (hit.id === 'settings') this.mode = 'settings';
@@ -196,21 +208,35 @@ export class TitleScene extends Phaser.Scene {
       this.settings = { ...this.settings, mute: !this.settings.mute };
       writeSettings(this.settings);
       audio.applySettings(this.settings);
+    } else if (hit.id === 'vibration') {
+      this.settings = { ...this.settings, vibration: !this.settings.vibration };
+      writeSettings(this.settings);
+    } else if (hit.id === 'reduce') {
+      this.settings = { ...this.settings, reduceEffects: !this.settings.reduceEffects };
+      writeSettings(this.settings);
     } else if (hit.id.startsWith('coat:')) this.coat = hit.id.slice(5);
     else if (hit.id.startsWith('hat:')) this.hat = hit.id.slice(4);
     else if (hit.id.startsWith('scarf:')) this.scarf = hit.id.slice(6);
-    else if (hit.id.startsWith('pro:')) this.pronouns = hit.id.slice(4) as Pronouns;
-    else if (hit.id === 'begin') {
+    else if (hit.id.startsWith('tone:')) {
+      this.tone = cleanTone(hit.id.slice(5));
+      this.settings = { ...this.settings, tone: this.tone };
+      writeSettings(this.settings);
+      if (hasContinue()) {
+        const save = loadSave();
+        save.tone = this.tone;
+        writeSave(save);
+      }
+    } else if (hit.id === 'begin') {
       const input = document.getElementById('creator-name') as HTMLInputElement | null;
       const save = freshSave();
       save.started = true;
       save.name = cleanName(input?.value ?? '');
-      save.pronouns = this.pronouns;
       save.coat = this.coat;
       save.hat = this.hat;
       save.scarf = this.scarf;
+      save.tone = this.tone;
       writeSave(save);
-      this.showName(false);
+      hideCreatorField();
       this.scene.start('adventure');
       return;
     } else return;
@@ -221,21 +247,12 @@ export class TitleScene extends Phaser.Scene {
     return { x: p.worldX, y: p.worldY };
   }
 
-  private showName(on: boolean): void {
-    const input = document.getElementById('creator-name');
-    input?.classList.toggle('show', on);
-  }
-
   private placeName(): void {
-    const input = document.getElementById('creator-name') as HTMLInputElement | null;
-    if (!input) return;
-    const on = this.mode === 'create';
-    input.classList.toggle('show', on);
-    if (!on) return;
+    if (this.mode !== 'create' || !this.scene.isActive()) {
+      hideCreatorField();
+      return;
+    }
     const canvas = this.game.canvas.getBoundingClientRect();
-    input.style.left = `${canvas.left + (520 / W) * canvas.width}px`;
-    input.style.top = `${canvas.top + (150 / H) * canvas.height}px`;
-    input.style.width = `${(420 / W) * canvas.width}px`;
-    input.style.height = `${(48 / H) * canvas.height}px`;
+    placeCreatorField(canvas, W, H);
   }
 }
