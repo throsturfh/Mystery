@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { AUDIO_FILES, audio } from '../audio';
+import { EDMUND_WALK_FPS, EDMUND_WALK_FRAMES, EDMUND_WALK_KEY, edmundFrameKey } from '../edmundWalk';
 import { AdventureScene } from './AdventureScene';
 import { MapScene } from './MapScene';
 import { StreetScene } from './StreetScene';
@@ -37,6 +38,10 @@ export class BootScene extends Phaser.Scene {
       for (const id of scarves) this.load.image(`L-${frame}-scarf-${id}`, asset(`layers/${frame}-scarf-${id}.png`));
     }
     for (let i = 0; i < 8; i++) this.load.image(`skuggi-walk-${i}`, asset(`cast/skuggi-walk-${i}.png`));
+    for (let i = 0; i < EDMUND_WALK_FRAMES; i++) {
+      const name = i.toString().padStart(2, '0');
+      this.load.image(edmundFrameKey(i), asset(`edmund-walk/walk-${name}.png`));
+    }
     for (const who of CAST) {
       const castFrames = who === 'sara' ? frames : [...frames, 'walk-6', 'walk-7', 'walk-8', 'walk-9'];
       for (const frame of castFrames) {
@@ -67,6 +72,13 @@ export class BootScene extends Phaser.Scene {
   create(): void {
     this.paintBust();
     this.paintShelfBook();
+    this.anims.create({
+      key: EDMUND_WALK_KEY,
+      frames: Array.from({ length: EDMUND_WALK_FRAMES }, (_, index) => ({ key: edmundFrameKey(index) })),
+      frameRate: EDMUND_WALK_FPS,
+      repeat: -1,
+      skipMissedFrames: false,
+    });
     audio.bind(this);
     this.scene.start('title');
   }

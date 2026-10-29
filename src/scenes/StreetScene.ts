@@ -3,6 +3,7 @@ import { audio } from '../audio';
 import { H, W } from '../config';
 import { ENTRY } from '../story';
 import { loadSave, writeSave, type RoomId } from '../save';
+import { playEdmundWalk, stopEdmundWalk, edmundSpeed } from '../edmundWalk';
 import { figurePixels, opaqueHeight, strideCount } from '../figure';
 import { idleKey, paintHero, walkKey } from '../tint';
 
@@ -13,7 +14,7 @@ type Dest = 'shop' | 'lantern';
 /** A short walk along the same street the map just showed. */
 export class StreetScene extends Phaser.Scene {
   private dest: Dest = 'shop';
-  private hero!: Phaser.GameObjects.Image;
+  private hero!: Phaser.GameObjects.Sprite;
   private x = 200;
   private frame = 0;
   private stride = 0;
@@ -50,7 +51,11 @@ export class StreetScene extends Phaser.Scene {
     this.x = 180;
     this.goal = this.dest === 'lantern' ? 1040 : 620;
     const profile = { name: save.name, detective: save.detective, coat: save.coat, hat: save.hat, scarf: save.scarf, tone: save.tone };
-    this.hero = this.add.image(this.x, 640, idleKey(profile)).setOrigin(0.5, 1).setScale(0.28);
+    this.hero = this.add.sprite(this.x, 640, idleKey(profile)).setOrigin(0.5, 1).setScale(0.28);
+    this.hero.on(Phaser.Animations.Events.ANIMATION_UPDATE, (_anim: Phaser.Animations.Animation, frame: Phaser.Animations.AnimationFrame) => {
+      if (loadSave().detective !== 'crowe' || this.done) return;
+      if (frame.index === 1 || frame.index === 7) audio.play('foot');
+    });
     if (save.detective === 'sara' && this.textures.exists('skuggi')) {
       this.add.image(this.x - 70, 648, 'skuggi').setOrigin(0.5, 1).setScale(0.28).setName('skuggi');
     }
@@ -74,18 +79,24 @@ export class StreetScene extends Phaser.Scene {
     const save = loadSave();
     const profile = { name: save.name, detective: save.detective, coat: save.coat, hat: save.hat, scarf: save.scarf, tone: save.tone };
     const dt = Math.min(0.05, delta / 1000);
-    const step = 140 * dt;
+    const crowe = save.detective === 'crowe';
+    const tNow = (this.x - 180) / Math.max(1, this.goal - 180);
+    const yNow = 640 - tNow * (this.dest === 'lantern' ? 70 : 40);
+    const step = (crowe ? edmundSpeed(yNow) : 140) * dt;
     if (this.x < this.goal) {
       this.x = Math.min(this.goal, this.x + step);
-      this.stride += step;
-      if (this.stride > 14) {
-        this.stride = 0;
-        this.frame = (this.frame + 1) % strideCount(save.detective);
-        if (this.frame % 3 === 0) audio.play('foot');
+      if (!crowe) {
+        this.stride += step;
+        if (this.stride > 14) {
+          this.stride = 0;
+          this.frame = (this.frame + 1) % strideCount(save.detective);
+          if (this.frame % 3 === 0) audio.play('foot');
+        }
+        const key = walkKey(profile, this.frame);
+        if (this.hero.texture.key !== key) this.hero.setTexture(key);
       }
-      const key = walkKey(profile, this.frame);
-      if (this.hero.texture.key !== key) this.hero.setTexture(key);
     } else {
+      if (crowe) stopEdmundWalk(this.hero);
       const key = idleKey(profile);
       if (this.hero.texture.key !== key) this.hero.setTexture(key);
       this.hero.setPosition(this.x, 600);
@@ -96,7 +107,8 @@ export class StreetScene extends Phaser.Scene {
     const t = (this.x - 180) / Math.max(1, this.goal - 180);
     const y = 640 - t * (this.dest === 'lantern' ? 70 : 40);
     this.hero.setPosition(this.x, y).setFlipX(false);
-    this.fitStreet(this.hero, y);
+    if (crowe) playEdmundWalk(this.hero, y);
+    else this.fitStreet(this.hero, y);
     const dog = this.children.getByName('skuggi') as Phaser.GameObjects.Image | null;
     if (dog?.active) {
       const frame = Math.floor(this.x / 18) % 8;
@@ -135,7 +147,7 @@ export class StreetScene extends Phaser.Scene {
     this.time.delayedCall(40, () => this.leave('adventure'));
   }
 
-  private fitStreet(image: Phaser.GameObjects.Image, y: number): void {
+  private fitStreet(image: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite, y: number): void {
     const source = image.texture.getSourceImage() as CanvasImageSource;
     image.setScale(figurePixels(y) / opaqueHeight(source, image.texture.key));
   }
