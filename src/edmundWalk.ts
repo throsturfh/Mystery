@@ -3,7 +3,8 @@ import { figurePixels } from './figure';
 
 export const EDMUND_WALK_KEY = 'edmund-walk';
 export const EDMUND_WALK_FRAMES = 12;
-export const EDMUND_WALK_FPS = 12;
+/** 20% faster than the original 12 fps cycle. Stride length is unchanged, so the soles stay planted. */
+export const EDMUND_WALK_FPS = 14.4;
 
 /**
  * Contact-pose opaque span (bottom - top), the same measurement as

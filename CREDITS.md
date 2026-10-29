@@ -1,6 +1,6 @@
 # Credits
 
-Hollowmere Dispatch, version 0.16.
+Hollowmere Dispatch, version 0.17.
 
 ## Rain
 
