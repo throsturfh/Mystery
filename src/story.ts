@@ -70,10 +70,10 @@ function byTone(tone: Tone, lines: Record<Tone, string>): string {
 /** Open floor in front of the furniture. Back edge is the far boards, front edge sits just above the inventory. */
 export const WALKS: Record<RoomId, Pt[]> = {
   office: [
-    { x: 170, y: 535 },
-    { x: 1120, y: 535 },
-    { x: 1200, y: 602 },
-    { x: 90, y: 602 },
+    { x: 300, y: 500 },
+    { x: 1100, y: 500 },
+    { x: 1160, y: 608 },
+    { x: 300, y: 608 },
   ],
   shop: [
     { x: 180, y: 535 },
@@ -108,8 +108,8 @@ export function walkFor(room: RoomId): Pt[] {
 
 export const ENTRY: Record<RoomId, Record<string, Spawn>> = {
   office: {
-    start: { x: 480, y: 578, face: 1 },
-    door: { x: 280, y: 575, face: 1 },
+    start: { x: 480, y: 560, face: 1 },
+    door: { x: 360, y: 545, face: 1 },
   },
   shop: {
     door: { x: 280, y: 575, face: 1 },
@@ -169,16 +169,17 @@ function baseSpots(save: Save, room: RoomId): Spot[] {
   const f = save.flags;
   if (room === 'office') {
     return [
-      spot('phone', 'the phone', 1120, 338, 42, 26, 1000, 572, 1, 'A rotary phone. It only rings when the news is inconvenient.', 'look'),
-      spot('lamp', 'the lamp', 1040, 300, 46, 40, 960, 570, 1, 'A green lamp. It makes the paperwork look more important than it is.', 'look'),
-      spot('edith', 'Edith', 1088, 214, 48, 64, 980, 568, 1, "Edith Crane. Dispatch, tea, and a filing system that frightens the dead.", 'edith'),
-      spot('board', 'the case board', 700, 230, 150, 90, 640, 568, 1, f.seenEnding ? 'The board can rest. Edith will pretend not to be pleased.' : 'The Bellweather file, pinned where it cannot sneak off.', 'look'),
-      spot('cabinet', 'the filing cabinet', 900, 290, 70, 90, 820, 568, 1, 'A filing cabinet. Something in the third drawer is humming, which is not a filing habit.', 'look'),
-      spot('chair', 'the rocking chair', 760, 400, 80, 70, 680, 578, 1, 'A rocking chair. It moves when the room is being honest.', 'look'),
-      spot('window', 'the window', 440, 250, 100, 110, 440, 568, -1, 'Rain on the glass. The city is minding its own business, for once.', 'look'),
-      spot('coat', 'the coat rack', 230, 370, 55, 120, 320, 575, -1, 'Spare coats. None of them have given notice.', 'look'),
-      spot('side-door', 'the collection room', 1210, 310, 60, 150, 1060, 575, 1, 'The collection room. Solved cases leave something on the shelves.', 'exit', { to: 'trophy', entry: 'office' }),
-      spot('office-door', 'the street', 95, 280, 75, 180, 250, 575, -1, 'The street door. The district is drawn on the far side.', 'map'),
+      spot('phone', 'the phone', 1020, 368, 36, 22, 980, 530, 1, 'A rotary phone. It only rings when the news is inconvenient.', 'look'),
+      spot('lamp', 'the lamp', 1062, 330, 40, 36, 980, 530, 1, 'A green lamp. It makes the paperwork look more important than it is.', 'look'),
+      spot('edith', 'Edith', 1040, 430, 70, 48, 960, 545, 1, "Edith Crane. Dispatch, tea, and a filing system that frightens the dead.", 'edith'),
+      spot('board', 'the case board', 660, 245, 160, 90, 660, 520, 1, f.seenEnding ? 'The board can rest. Edith will pretend not to be pleased.' : 'The Bellweather file, pinned where it cannot sneak off.', 'look'),
+      spot('cabinet', 'the filing cabinet', 920, 380, 60, 80, 900, 530, 1, 'A filing cabinet. Something in the third drawer is humming, which is not a filing habit.', 'look'),
+      spot('chair', 'the rocking chair', 745, 410, 70, 70, 745, 545, -1, 'A rocking chair. It moves when the room is being honest.', 'look'),
+      spot('window', 'the window', 360, 280, 110, 110, 400, 520, -1, 'Rain on the glass. The city is minding its own business, for once.', 'look'),
+      spot('coat', 'the coat rack', 210, 360, 40, 100, 340, 530, -1, 'Spare coats. None of them have given notice.', 'look'),
+      spot('paperweight', 'the paperweight', 210, 456, 28, 18, 360, 560, -1, 'A brass paperweight. It has kept one letter still, and considers that a career.', 'look'),
+      spot('side-door', 'the collection room', 1173, 310, 55, 150, 1040, 530, 1, 'The collection room. Solved cases leave something on the shelves.', 'exit', { to: 'trophy', entry: 'office' }),
+      spot('office-door', 'the street', 107, 310, 60, 155, 360, 520, -1, 'The street door. Candle Street is on the far side, being wet.', 'map'),
     ];
   }
   if (room === 'shop') {
