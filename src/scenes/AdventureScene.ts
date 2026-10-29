@@ -22,6 +22,7 @@ import {
   type Verb,
 } from '../story';
 import { detectiveById } from '../detectives';
+import { playEdmundWalk, stopEdmundWalk, edmundSpeed } from '../edmundWalk';
 import { figurePixels, opaqueHeight, strideCount } from '../figure';
 import { idleKey, paintHero, walkKey } from '../tint';
 import { aside } from '../voices';
@@ -47,7 +48,7 @@ export class AdventureScene extends Phaser.Scene {
   private pose: 'none' | 'look' | 'pick' | 'give' | 'receive' | 'write' | 'shelf' | 'talk' = 'none';
   private poseUntil = 0;
   private poseFrom = 0;
-  private hero!: Phaser.GameObjects.Image;
+  private hero!: Phaser.GameObjects.Sprite;
   private shadow!: Phaser.GameObjects.Ellipse;
   private ghost?: Phaser.GameObjects.Image;
   private ghostBaseY = 0;
@@ -126,7 +127,11 @@ export class AdventureScene extends Phaser.Scene {
     audio.ambient(this.save.room);
     this.ctx = this.makeCtx();
     this.shadow = this.add.ellipse(0, 0, 86, 18, 0x000000, 0.35).setDepth(90);
-    this.hero = this.add.image(0, 0, 'detective').setOrigin(0.5, 1).setDepth(700);
+    this.hero = this.add.sprite(0, 0, 'hero').setOrigin(0.5, 1).setDepth(700);
+    this.hero.on(Phaser.Animations.Events.ANIMATION_UPDATE, (_anim: Phaser.Animations.Animation, frame: Phaser.Animations.AnimationFrame) => {
+      if (this.save.detective !== 'crowe' || !this.walking) return;
+      if (frame.index === 0 || frame.index === 6) audio.play('foot');
+    });
     this.hudGfx = this.add.graphics().setDepth(2000);
     this.caption = this.add
       .text(500, 672, '', {
@@ -236,7 +241,7 @@ export class AdventureScene extends Phaser.Scene {
       const dx = this.goal.x - this.fx;
       const dy = this.goal.y - this.fy;
       const dist = Math.hypot(dx, dy);
-      const step = 240 * dt;
+      const step = (this.save.detective === 'crowe' ? edmundSpeed(this.fy) : 240) * dt;
       if (dist <= step) {
         const face = Math.abs(dx) > 2 ? (dx < 0 ? -1 : 1) : this.face;
         this.place(this.goal.x, this.goal.y, face);
@@ -246,12 +251,14 @@ export class AdventureScene extends Phaser.Scene {
         this.walkResolve = null;
         done?.(true);
       } else {
-        this.stride += step;
-        const per = 16;
-        while (this.stride >= per) {
-          this.stride -= per;
-          this.walkFrame = (this.walkFrame + 1) % strideCount(this.save.detective);
-          if (this.walkFrame % 3 === 0) audio.play('foot');
+        if (this.save.detective !== 'crowe') {
+          this.stride += step;
+          const per = 16;
+          while (this.stride >= per) {
+            this.stride -= per;
+            this.walkFrame = (this.walkFrame + 1) % strideCount(this.save.detective);
+            if (this.walkFrame % 3 === 0) audio.play('foot');
+          }
         }
         this.place(this.fx + (dx / dist) * step, this.fy + (dy / dist) * step, dx < 0 ? -1 : 1);
       }
@@ -748,7 +755,7 @@ export class AdventureScene extends Phaser.Scene {
     this.save.face = face;
   }
 
-  private fit(image: Phaser.GameObjects.Image, y: number, portion = 1): void {
+  private fit(image: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite, y: number, portion = 1): void {
     const source = image.texture.getSourceImage() as CanvasImageSource;
     const height = opaqueHeight(source, image.texture.key);
     image.setScale((figurePixels(y) * portion) / height);
@@ -774,12 +781,19 @@ export class AdventureScene extends Phaser.Scene {
     const posing = this.time.now < this.poseUntil;
     if (!posing) this.pose = 'none';
     const look = this.profile();
-    if (this.walking && !posing) {
-      const key = walkKey(look, this.walkFrame);
-      if (this.hero.texture.key !== key && this.textures.exists(key)) this.hero.setTexture(key);
+    const croweWalk = this.save.detective === 'crowe' && this.walking && !posing;
+    if (croweWalk) {
+      playEdmundWalk(this.hero, this.fy);
     } else {
-      const key = idleKey(look);
-      if (this.hero.texture.key !== key) this.hero.setTexture(key);
+      if (this.save.detective === 'crowe') stopEdmundWalk(this.hero);
+      if (this.walking && !posing) {
+        const key = walkKey(look, this.walkFrame);
+        if (this.hero.texture.key !== key && this.textures.exists(key)) this.hero.setTexture(key);
+      } else {
+        const key = idleKey(look);
+        if (this.hero.texture.key !== key) this.hero.setTexture(key);
+      }
+      this.fit(this.hero, this.fy);
     }
     const breath = this.walking ? 0 : Math.sin(this.time.now / 980) * 1.1;
     const gesture = this.gesture(this.time.now);
