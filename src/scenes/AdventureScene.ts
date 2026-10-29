@@ -22,6 +22,7 @@ import {
   type Verb,
 } from '../story';
 import { detectiveById } from '../detectives';
+import { clipFor, edmundDemo, EDMUND_SHEET, type EdmundFacing } from '../edmundSteps';
 import { figurePixels, opaqueHeight, strideCount } from '../figure';
 import { idleKey, paintHero, walkKey } from '../tint';
 import { aside } from '../voices';
@@ -93,6 +94,12 @@ export class AdventureScene extends Phaser.Scene {
   private cardResolve: (() => void) | null = null;
   private overlay: Phaser.GameObjects.GameObject[] = [];
   private departing = false;
+  private edmundFacing: EdmundFacing = 'side';
+  private edmundSpan = 0;
+  private edmundSole: number = EDMUND_SHEET.pivotY;
+  private takeFrom = 0;
+  private takeUntil = 0;
+  private demoProp?: Phaser.GameObjects.Image;
 
   constructor() {
     super('adventure');
@@ -119,6 +126,16 @@ export class AdventureScene extends Phaser.Scene {
     this.walking = false;
     this.goal = null;
     this.save = loadSave();
+    if (edmundDemo()) {
+      this.save.detective = 'crowe';
+      this.save.room = 'office';
+      this.save.coat = 'tan';
+      this.save.hat = 'brown';
+      this.save.scarf = 'plaid';
+      this.save.x = 220;
+      this.save.y = 575;
+      this.save.face = 1;
+    }
     this.fx = this.save.x;
     this.fy = this.save.y;
     this.face = this.save.face;
@@ -232,7 +249,9 @@ export class AdventureScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     if (this.departing || !this.scene.isActive() || !this.hero?.active) return;
     const dt = Math.min(0.05, delta / 1000);
-    if (this.walking && this.goal) {
+    if (this.walking && this.goal && this.isEdmund()) {
+      this.stepEdmund(dt);
+    } else if (this.walking && this.goal) {
       const dx = this.goal.x - this.fx;
       const dy = this.goal.y - this.fy;
       const dist = Math.hypot(dx, dy);
@@ -291,6 +310,7 @@ export class AdventureScene extends Phaser.Scene {
         this.poseFrom = this.time.now;
         const hold = kind === 'write' ? 980 : kind === 'pick' || kind === 'shelf' ? 640 : 520;
         this.poseUntil = this.time.now + hold;
+        if (this.isEdmund() && (kind === 'pick' || kind === 'receive')) this.beginTake();
       },
       refresh: () => this.refresh(),
       showGhost: (on) => this.showGhost(on),
@@ -344,7 +364,8 @@ export class AdventureScene extends Phaser.Scene {
     }
     this.busyScript = true;
     try {
-      await onEnter(this.ctx);
+      if (edmundDemo() && this.save.detective === 'crowe' && this.save.room === 'office') await this.runEdmundDemo();
+      else await onEnter(this.ctx);
     } catch (err) {
       console.error(err);
     } finally {
@@ -773,26 +794,178 @@ export class AdventureScene extends Phaser.Scene {
   private drawHero(_dt: number): void {
     const posing = this.time.now < this.poseUntil;
     if (!posing) this.pose = 'none';
-    const look = this.profile();
-    if (this.walking && !posing) {
-      const key = walkKey(look, this.walkFrame);
-      if (this.hero.texture.key !== key && this.textures.exists(key)) this.hero.setTexture(key);
+    const taking = this.time.now < this.takeUntil;
+    if (this.isEdmund()) {
+      this.drawEdmund(taking);
     } else {
-      const key = idleKey(look);
-      if (this.hero.texture.key !== key) this.hero.setTexture(key);
+      const look = this.profile();
+      if (this.walking && !posing) {
+        const key = walkKey(look, this.walkFrame);
+        if (this.hero.texture.key !== key && this.textures.exists(key)) this.hero.setTexture(key);
+      } else {
+        const key = idleKey(look);
+        if (this.hero.texture.key !== key) this.hero.setTexture(key);
+      }
+      const breath = this.walking ? 0 : Math.sin(this.time.now / 980) * 1.1;
+      const gesture = this.gesture(this.time.now);
+      this.hero.setOrigin(0.5, 1);
+      this.fit(this.hero, this.fy);
+      this.hero.setPosition(this.fx, this.fy + breath + gesture.y);
+      this.hero.setFlipX(this.face < 0);
+      this.hero.setAngle(gesture.angle);
     }
-    const breath = this.walking ? 0 : Math.sin(this.time.now / 980) * 1.1;
-    const gesture = this.gesture(this.time.now);
-    this.fit(this.hero, this.fy);
-    this.hero.setPosition(this.fx, this.fy + breath + gesture.y);
-    this.hero.setFlipX(this.face < 0);
-    this.hero.setAngle(gesture.angle);
     this.hero.setAlpha(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 0.55 : 1);
     this.hero.setDepth(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 900 : 500 + this.fy);
     this.shadow.setPosition(this.fx, this.fy + 2);
     const shadow = figurePixels(this.fy) / 320;
     this.shadow.setScale(shadow, shadow * 0.85);
     this.shadow.setAlpha(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 0.15 : 0.35);
+  }
+
+  private isEdmund(): boolean {
+    return this.save?.detective === 'crowe' && this.textures.exists(EDMUND_SHEET.key);
+  }
+
+  private drawEdmund(taking: boolean): void {
+    const sheet = EDMUND_SHEET;
+    let index = sheet.idle.start;
+    let flip = this.face < 0;
+    if (taking) {
+      const span = Math.max(1, this.takeUntil - this.takeFrom);
+      const frame = Math.min(sheet.take.count - 1, Math.floor(((this.time.now - this.takeFrom) / span) * sheet.take.count));
+      index = sheet.take.start + frame;
+      if (frame >= sheet.take.grasp && this.demoProp?.active) this.demoProp.setVisible(false);
+    } else if (this.walking) {
+      const clip = clipFor(this.edmundFacing);
+      index = clip.start + (this.walkFrame % clip.count);
+      flip = this.edmundFacing === 'side' && this.face < 0;
+    } else {
+      index = sheet.idle.start + (Math.floor((this.time.now / 1000) * sheet.idle.fps) % sheet.idle.count);
+    }
+    if (this.hero.texture.key !== sheet.key || this.hero.frame.name !== String(index)) {
+      this.hero.setTexture(sheet.key, index);
+    }
+    this.spanOfEdmund();
+    this.hero.setOrigin(sheet.pivotX / sheet.cellW, this.edmundSole / sheet.cellH);
+    this.hero.setScale(figurePixels(this.fy) / this.edmundSpan);
+    this.hero.setPosition(this.fx, this.fy);
+    this.hero.setFlipX(flip);
+    this.hero.setAngle(0);
+  }
+
+  private spanOfEdmund(): number {
+    if (this.edmundSpan > 0) return this.edmundSpan;
+    const frame = this.textures.get(EDMUND_SHEET.key).get(EDMUND_SHEET.idle.start);
+    const image = frame.source.image as CanvasImageSource;
+    const canvas = document.createElement('canvas');
+    canvas.width = EDMUND_SHEET.cellW;
+    canvas.height = EDMUND_SHEET.cellH;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return 1000;
+    ctx.drawImage(image, frame.cutX, frame.cutY, frame.cutWidth, frame.cutHeight, 0, 0, EDMUND_SHEET.cellW, EDMUND_SHEET.cellH);
+    const data = ctx.getImageData(0, 0, EDMUND_SHEET.cellW, EDMUND_SHEET.cellH).data;
+    let top = 0;
+    let bottom: number = EDMUND_SHEET.pivotY;
+    const rowHit = (y: number) => {
+      for (let x = 0; x < EDMUND_SHEET.cellW; x += 4) {
+        if (data[(y * EDMUND_SHEET.cellW + x) * 4 + 3] > 24) return true;
+      }
+      return false;
+    };
+    for (let y = 0; y < EDMUND_SHEET.cellH; y++) {
+      if (rowHit(y)) {
+        top = y;
+        break;
+      }
+    }
+    for (let y = EDMUND_SHEET.cellH - 1; y >= 0; y--) {
+      if (rowHit(y)) {
+        bottom = y;
+        break;
+      }
+    }
+    this.edmundSole = bottom;
+    this.edmundSpan = Math.max(1, bottom - top);
+    return this.edmundSpan;
+  }
+
+  private beginTake(): void {
+    this.takeFrom = this.time.now;
+    this.takeUntil = this.time.now + (EDMUND_SHEET.take.count / EDMUND_SHEET.take.fps) * 1000;
+    this.poseUntil = this.takeUntil;
+  }
+
+  private playTake(): Promise<void> {
+    this.walking = false;
+    this.goal = null;
+    this.beginTake();
+    return new Promise((resolve) => this.time.delayedCall(this.takeUntil - this.takeFrom, () => resolve()));
+  }
+
+  private stepEdmund(dt: number): void {
+    if (!this.goal) return;
+    const facing = this.edmundAim();
+    if (facing !== this.edmundFacing) {
+      this.edmundFacing = facing;
+      this.walkFrame = 0;
+      this.stride = 0;
+    }
+    const clip = clipFor(facing);
+    const dx = this.goal.x - this.fx;
+    const dy = this.goal.y - this.fy;
+    const dist = Math.hypot(dx, dy);
+    const px = figurePixels(this.fy);
+    // A step of about 0.7 m at the current on-screen height, so the feet stay with the ground.
+    const advance = (0.7 / clip.perStep) * (px / 1.9);
+    const speed = Math.max(40, advance * clip.fps * (facing === 'side' ? 1 : 0.55));
+    if (dist <= speed * dt) {
+      const face: 1 | -1 = facing === 'side' && Math.abs(dx) > 2 ? (dx < 0 ? -1 : 1) : this.face;
+      this.place(this.goal.x, this.goal.y, face);
+      this.walking = false;
+      this.goal = null;
+      this.edmundFacing = 'side';
+      const done = this.walkResolve;
+      this.walkResolve = null;
+      done?.(true);
+      return;
+    }
+    this.stride += speed * dt;
+    while (this.stride >= advance) {
+      this.stride -= advance;
+      this.walkFrame = (this.walkFrame + 1) % clip.count;
+      if (this.walkFrame % clip.perStep === 0) audio.play('foot');
+    }
+    const face: 1 | -1 = facing === 'side' ? (dx < 0 ? -1 : 1) : this.face;
+    this.place(this.fx + (dx / dist) * speed * dt, this.fy + (dy / dist) * speed * dt, face);
+  }
+
+  private edmundAim(): EdmundFacing {
+    if (!this.goal) return 'side';
+    const dx = this.goal.x - this.fx;
+    const dy = this.goal.y - this.fy;
+    if (Math.abs(dy) > Math.abs(dx) * 0.85 && Math.abs(dy) > 8) return dy > 0 ? 'front' : 'back';
+    return 'side';
+  }
+
+  private wait(ms: number): Promise<void> {
+    return new Promise((resolve) => this.time.delayedCall(ms, resolve));
+  }
+
+  /** Plays in the existing office. Does not add a puzzle item. */
+  private async runEdmundDemo(): Promise<void> {
+    this.place(220, 575, 1);
+    this.demoProp = this.add.image(360, 560, 'prop-pencil').setDepth(40).setScale(0.35);
+    await this.wait(250);
+    await this.walkTo(1040, 570);
+    await this.wait(1400);
+    this.place(520, 545, 1);
+    await this.walkTo(560, 598);
+    await this.walkTo(520, 545);
+    await this.walkTo(560, 598);
+    await this.walkTo(420, 575);
+    this.face = -1;
+    await this.playTake();
+    await this.wait(600);
   }
 
   private walkTo(x: number, y: number): Promise<boolean> {

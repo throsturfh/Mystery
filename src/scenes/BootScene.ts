@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { AUDIO_FILES, audio } from '../audio';
+import { EDMUND_SHEET, edmundDemo } from '../edmundSteps';
 import { AdventureScene } from './AdventureScene';
 import { MapScene } from './MapScene';
 import { StreetScene } from './StreetScene';
@@ -62,13 +63,17 @@ export class BootScene extends Phaser.Scene {
     this.load.image('prop-pencil', asset('prop-pencil.png'));
     this.load.image('prop-letter', asset('prop-letter.png'));
     this.load.image('trophy-medal', asset('trophy-medal.png'));
+    this.load.spritesheet(EDMUND_SHEET.key, asset('edmund/figure.png'), {
+      frameWidth: EDMUND_SHEET.cellW,
+      frameHeight: EDMUND_SHEET.cellH,
+    });
   }
 
   create(): void {
     this.paintBust();
     this.paintShelfBook();
     audio.bind(this);
-    this.scene.start('title');
+    this.scene.start(edmundDemo() ? 'adventure' : 'title');
   }
 
   /** A slim upright spine, so the returned book can sit in the shelf gap. */
