@@ -12,6 +12,8 @@ export const EDMUND_WALK_FPS = 14.4;
  * lands at the v0.16 on-screen height.
  */
 const FIGURE_PX = 1023;
+/** In-world size against the other figures. Depth scaling stays inside figurePixels. */
+export const EDMUND_SIZE = 1.1;
 const FRAME_W = 760;
 const FRAME_H = 1240;
 /** First row under the soles. The painted baseline is y=1215. */
@@ -32,7 +34,7 @@ export function edmundFrameKey(index: number): string {
 }
 
 export function edmundScale(y: number): number {
-  return figurePixels(y) / FIGURE_PX;
+  return (figurePixels(y) * EDMUND_SIZE) / FIGURE_PX;
 }
 
 /** Screen pixels per second. One step is six frames, so the sole stays planted. */

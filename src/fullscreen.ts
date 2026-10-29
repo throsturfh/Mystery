@@ -2,8 +2,6 @@ import type Phaser from 'phaser';
 
 const TIP_KEY = 'hollowmere-ios-home-tip';
 
-type Lockable = ScreenOrientation & { lock?: (orientation: 'landscape') => Promise<void> };
-
 function isPortrait(): boolean {
   return window.innerHeight > window.innerWidth;
 }
@@ -23,11 +21,6 @@ function isStandalone(): boolean {
     window.matchMedia('(display-mode: standalone)').matches ||
     window.matchMedia('(display-mode: fullscreen)').matches
   );
-}
-
-function fullscreenElement(): Element | null {
-  const doc = document as Document & { webkitFullscreenElement?: Element | null };
-  return document.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
 }
 
 function tipDismissed(): boolean {
@@ -51,7 +44,6 @@ export function bindDisplay(game: Phaser.Game): void {
   const tip = document.getElementById('ios-tip');
   const dismiss = document.getElementById('ios-tip-dismiss');
   let dismissed = tipDismissed();
-  let pending = false;
 
   const refit = () => {
     const parent = document.getElementById('game');
@@ -76,26 +68,6 @@ export function bindDisplay(game: Phaser.Game): void {
     tip?.setAttribute('aria-hidden', showTip ? 'false' : 'true');
   };
 
-  const enterFullscreen = async () => {
-    if (isPortrait() || fullscreenElement() || pending) return;
-    const root = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
-    const request = root.requestFullscreen?.bind(root) ?? root.webkitRequestFullscreen?.bind(root);
-    if (!request) return;
-    pending = true;
-    try {
-      await request({ navigationUI: 'hide' });
-    } catch {
-      /* a second tap can try again; some browsers refuse without a gesture */
-    }
-    try {
-      await (screen.orientation as Lockable | undefined)?.lock?.('landscape');
-    } catch {
-      /* orientation lock is often refused outside a fullscreen Android browser */
-    }
-    pending = false;
-    scheduleFit();
-  };
-
   dismiss?.addEventListener('click', (event) => {
     event.stopPropagation();
     dismissed = true;
@@ -103,9 +75,6 @@ export function bindDisplay(game: Phaser.Game): void {
     syncChrome();
   });
 
-  window.addEventListener('pointerdown', () => void enterFullscreen(), { capture: true });
-  document.addEventListener('fullscreenchange', scheduleFit);
-  document.addEventListener('webkitfullscreenchange', scheduleFit);
   window.addEventListener('resize', () => {
     syncChrome();
     scheduleFit();

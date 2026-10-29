@@ -3,7 +3,7 @@ import { audio } from '../audio';
 import { H, W } from '../config';
 import { ENTRY } from '../story';
 import { loadSave, writeSave, type RoomId } from '../save';
-import { playEdmundWalk, stopEdmundWalk, edmundSpeed } from '../edmundWalk';
+import { EDMUND_SIZE, playEdmundWalk, stopEdmundWalk, edmundSpeed } from '../edmundWalk';
 import { figurePixels, opaqueHeight, strideCount } from '../figure';
 import { idleKey, paintHero, walkKey } from '../tint';
 
@@ -100,7 +100,7 @@ export class StreetScene extends Phaser.Scene {
       const key = idleKey(profile);
       if (this.hero.texture.key !== key) this.hero.setTexture(key);
       this.hero.setPosition(this.x, 600);
-      this.fitStreet(this.hero, 600);
+      this.fitStreet(this.hero, 600, crowe ? EDMUND_SIZE : 1);
       this.arrive();
       return;
     }
@@ -147,9 +147,9 @@ export class StreetScene extends Phaser.Scene {
     this.time.delayedCall(40, () => this.leave('adventure'));
   }
 
-  private fitStreet(image: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite, y: number): void {
+  private fitStreet(image: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite, y: number, portion = 1): void {
     const source = image.texture.getSourceImage() as CanvasImageSource;
-    image.setScale(figurePixels(y) / opaqueHeight(source, image.texture.key));
+    image.setScale((figurePixels(y) * portion) / opaqueHeight(source, image.texture.key));
   }
 
   private leave(next: string): void {
