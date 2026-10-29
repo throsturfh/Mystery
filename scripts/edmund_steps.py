@@ -138,86 +138,33 @@ def _largest(mask: np.ndarray) -> np.ndarray:
     return labels == keep
 
 
-# --- poses ------------------------------------------------------------------
+# --- poses: a 12-frame walk, two steps, keyed to a classic cycle ----------
+# Feet are in pixels, +x forward, y up from the sole.
+# Foot angle: positive lifts the toe (heel strike), negative lifts the heel.
 
-BOB = [(0.0, 0.0), (0.22, -0.55), (0.33, -1.0), (0.5, 0.15), (0.72, 0.65), (0.86, 1.0), (1.0, 0.0)]
-LIFT = [(0.0, 0.0), (0.28, 0.04), (0.5, 0.12), (0.78, 0.55), (0.9, 0.2), (1.0, 0.0)]
-
-
-def step_pose(frame: int, per_step: int, reach: float = 0.0) -> dict:
-    """Screen-space pose. +x is forward (character faces right). y grows down."""
-    u = 0.0 if per_step <= 1 else (frame % per_step) / per_step
-    step = 0 if per_step <= 1 else frame // per_step
-    right_supports = step % 2 == 1
-    bob = interp(u, BOB) * 18
-    stride = 170
-    # Support foot plants and travels back under the body. Swing foot lifts through.
-    sup_x = stride * (1 - 2 * u)
-    sup_y = 0.0
-    e = smooth(u)
-    sw_x = -stride + 2 * stride * e
-    sw_lift = interp(u, LIFT) * 200
-    if right_supports:
-        rx, ry, lx, ly = sup_x, sup_y, sw_x, sw_lift
-        arm_r = -math.cos(u * math.pi) * 0.7
-        arm_l = math.cos(u * math.pi) * 0.7
-    else:
-        rx, ry, lx, ly = sw_x, sw_lift, sup_x, sup_y
-        arm_r = math.cos(u * math.pi) * 0.7
-        arm_l = -math.cos(u * math.pi) * 0.7
-    if reach:
-        arm_l = arm_l * (1 - reach) + 1.15 * reach
-        bob += 10 * reach
-    return {
-        "u": u,
-        "bob": bob,
-        "reach": reach,
-        "hip": (0.0, bob),
-        "rx": rx,
-        "ry": ry,
-        "lx": lx,
-        "ly": ly,
-        "arm_r": arm_r,
-        "arm_l": arm_l,
-        "hem": -math.sin((u - 0.28) * math.pi * 2) * 16,
-        "scarf": -math.sin((u - 0.35) * math.pi * 2) * 14,
-    }
+# left foot front on frame 0. Six keys, then the legs swap.
+_HALF = [
+    # contact
+    (168, 8, 24, -158, 34, -36, 2, 16),
+    # into the down
+    (118, 0, 8, -118, 18, -18, -12, 14),
+    # down: front knee bent, body lowest
+    (62, 0, 0, -72, 14, -8, -30, 12),
+    # rising, free foot leaving
+    (12, 0, 0, -8, 78, 8, -4, 10),
+    # passing: support straight, free knee up
+    (-18, 0, -6, 48, 132, 16, 12, 8),
+    # up: support on the toe, free foot reaching
+    (-48, 28, -30, 132, 86, 26, 22, 8),
+]
 
 
-def idle_pose(i: int, n: int = 8) -> dict:
-    t = i / n
-    breath = math.sin(t * math.pi * 2) * 6
-    p = step_pose(0, 2)
-    p["bob"] = -breath
-    p["rx"], p["ry"] = 36, 0
-    p["lx"], p["ly"] = -28, 0
-    p["arm_r"] = 0.35
-    p["arm_l"] = 0.05
-    p["hem"] = math.sin(t * math.pi * 2 + 0.4) * 4
-    p["scarf"] = math.sin(t * math.pi * 2) * 5
-    p["reach"] = 0.0
-    return p
+def _mirror(row):
+    lx, ly, la, rx, ry, ra, bob, lean = row
+    return (rx, ry, ra, lx, ly, la, bob, lean)
 
 
-def take_pose(i: int, n: int = 10) -> dict:
-    keys = [(0.0, 0.0), (0.12, -0.08), (0.42, 1.0), (0.55, 1.0), (0.82, 0.15), (1.0, 0.0)]
-    k = max(0.0, interp(i / (n - 1), keys))
-    k = smooth(k)
-    p = idle_pose(0)
-    p["reach"] = k
-    p["arm_l"] = 0.05 * (1 - k) + 1.2 * k
-    p["bob"] = 8 * k
-    p["grasp"] = i >= 5
-    return p
-
-
-# --- drawing ----------------------------------------------------------------
-
-def _pt(pose, dx, above, view: str) -> tuple[float, float]:
-    """dx is forward (screen right). `above` is pixels above the sole."""
-    y = PIVOT_Y - above + pose["bob"]
-    x = PIVOT_X + dx
-    return x, y
+_CYCLE = _HALF + [_mirror(row) for row in _HALF]
 
 
 class Frame:
@@ -284,266 +231,362 @@ def _rotated_anchor(anchor, size, angle):
     return anchor
 
 
-def coat_polygon(pose, view: str) -> list[tuple[float, float]]:
-    hem = pose["hem"]
-    # Shoulder near the chin, ragged hem a little above the shoes.
-    if view == "three":
-        return [
-            _pt(pose, -80, 700, view),
-            _pt(pose, 20, 740, view),
-            _pt(pose, 100, 690, view),
-            _pt(pose, 120, 420, view),
-            _pt(pose, 90 + hem, 250, view),
-            _pt(pose, 10 + hem * 0.5, 220, view),
-            _pt(pose, -110 + hem * 0.25, 260, view),
-            _pt(pose, -100, 430, view),
-        ]
-    if view == "front":
-        top = _pt(pose, 0, 700, view)[1]
-        bot = _pt(pose, 0, 300, view)[1]
-        cx = PIVOT_X
-        return [
-            (cx - 130, top), (cx + 130, top),
-            (cx + 145, bot + 30), (cx + 36, bot),
-            (cx - 36, bot), (cx - 145, bot + 20),
-        ]
-    top = _pt(pose, 0, 700, view)[1]
-    bot = _pt(pose, 0, 310, view)[1]
-    cx = PIVOT_X
-    return [(cx - 130, top), (cx + 130, top), (cx + 140, bot), (cx - 140, bot)]
 
-
-def leg(pose, which: str, view: str) -> tuple[list, list]:
-    """Thigh and shin polygons, plus the shoe anchor and angle."""
-    if which == "r":
-        fx, fy = pose["rx"], pose["ry"]
-        hip_x = 36
+def step_pose(frame: int, per_step: int, reach: float = 0.0) -> dict:
+    if per_step <= 1:
+        row = _CYCLE[0]
     else:
-        fx, fy = pose["lx"], pose["ly"]
-        hip_x = -36
-    if view == "front":
-        hip_x = 48 if which == "r" else -48
-        # In front view the stride is toward the camera: x separation stays, lift is y.
-        foot = (PIVOT_X + hip_x * 0.9 + fx * 0.55, PIVOT_Y - fy + pose["bob"])
-        hip = (PIVOT_X + hip_x, _pt(pose, 0, 500, view)[1])
-    elif view == "back":
-        hip_x = 46 if which == "r" else -46
-        foot = (PIVOT_X + hip_x * 0.9 - fx * 0.55, PIVOT_Y - fy + pose["bob"])
-        hip = (PIVOT_X + hip_x, _pt(pose, 0, 500, view)[1])
-    else:
-        foot = _pt(pose, fx + hip_x * 0.15, fy, view)
-        # _pt treats the second value as "above the sole", and fy is already a lift.
-        foot = (PIVOT_X + fx + hip_x * 0.15, PIVOT_Y - fy + pose["bob"])
-        hip = _pt(pose, hip_x * 0.4, 500, view)
-    # Knee bends forward (screen-right in 3/4) when the foot is up or behind.
-    if fy > 36:
-        kx = hip[0] + (55 if view == "three" else 10)
-        ky = hip[1] + 70 + min(40, fy * 0.15)
-    else:
-        kx = (hip[0] + foot[0]) / 2 + 6
-        ky = (hip[1] + foot[1]) / 2 - 4
-    knee = (kx, ky)
-    def tube(a, b, r0, r1):
-        ang = math.atan2(b[1] - a[1], b[0] - a[0])
-        px, py = -math.sin(ang), math.cos(ang)
-        return [
-            (a[0] + px * r0, a[1] + py * r0),
-            (b[0] + px * r1, b[1] + py * r1),
-            (b[0] - px * r1, b[1] - py * r1),
-            (a[0] - px * r0, a[1] - py * r0),
-        ]
-    thigh = tube(hip, knee, 36, 28)
-    shin = tube(knee, foot, 26, 18)
-    angle = math.degrees(math.atan2(foot[1] - knee[1], foot[0] - knee[0])) - 90
-    return [thigh, shin], (foot, angle)
+        # 6 frames per step. 12-frame cycle uses per_step 6. 8-frame uses 4,
+        # so sample the 12-key cycle at even spacing.
+        slots = 12
+        if per_step == 6:
+            index = frame % 12
+        else:
+            index = int(round((frame % (per_step * 2)) / (per_step * 2) * slots)) % slots
+        row = _CYCLE[index]
+    lx, ly, la, rx, ry, ra, bob, lean = row
+    # Arms oppose the legs. The lantern is in the right hand.
+    arm_r = max(-0.9, min(0.9, (lx - rx) / 300))
+    arm_l = -arm_r
+    # Coat and scarf trail the back foot.
+    back_x = lx if lx < rx else rx
+    hem = back_x * 0.16
+    scarf = hem * 0.85 + arm_r * 10
+    if reach:
+        arm_l = arm_l * (1 - reach) + 1.05 * reach
+        bob = bob * (1 - reach) - 16 * reach
+        lean = lean * (1 - reach) + 22 * reach
+    return {
+        "lx": lx, "ly": ly, "la": la,
+        "rx": rx, "ry": ry, "ra": ra,
+        "bob": bob,
+        "lean": lean,
+        "arm_l": arm_l,
+        "arm_r": arm_r,
+        "hem": hem,
+        "scarf": scarf,
+        "reach": reach,
+        "grasp": False,
+    }
 
 
-def scarf_ribbon(pose, view: str) -> list[tuple[float, float]]:
-    lag = pose["scarf"]
-    if view == "three":
-        a = _pt(pose, 18, 690, view)
-        b = _pt(pose, 28 + lag * 0.3, 520, view)
-        c = _pt(pose, 10 + lag, 360, view)
-        d = _pt(pose, 22 + lag * 1.2, 240, view)
-    else:
-        a = (PIVOT_X, _pt(pose, 0, 690, view)[1])
-        b = (PIVOT_X + lag * 0.2, _pt(pose, 0, 520, view)[1])
-        c = (PIVOT_X - 8 + lag, _pt(pose, 0, 360, view)[1])
-        d = (PIVOT_X + 6 + lag, _pt(pose, 0, 250, view)[1])
-    return [a, b, c, d]
+def idle_pose(i: int, n: int = 8) -> dict:
+    t = i / n
+    breath = math.sin(t * math.pi * 2)
+    p = step_pose(0, 12)
+    p["lx"], p["ly"], p["la"] = -18, 0, 0
+    p["rx"], p["ry"], p["ra"] = 34, 0, 2
+    p["bob"] = breath * 7
+    p["lean"] = 8
+    p["arm_r"] = 0.28 + breath * 0.04
+    p["arm_l"] = -0.08
+    p["hem"] = breath * 6
+    p["scarf"] = breath * 8
+    p["reach"] = 0.0
+    return p
 
 
-def arm_joints(pose, which: str, view: str):
-    swing = pose["arm_r"] if which == "r" else pose["arm_l"]
-    if view == "three":
-        sx = 78 if which == "r" else -55
-        shoulder = _pt(pose, sx, 680, view)
-        reach = pose["reach"] if which == "l" else 0
-        length = 230
-        # swing > 0 reaches forward (screen right). 0 hangs down.
+def take_pose(i: int, n: int = 10) -> dict:
+    keys = [(0.0, 0.0), (0.12, -0.05), (0.45, 1.0), (0.58, 1.0), (0.85, 0.12), (1.0, 0.0)]
+    k = max(0.0, interp(i / (n - 1), keys))
+    k = smooth(k)
+    p = idle_pose(2)
+    p["reach"] = k
+    p["arm_l"] = -0.08 * (1 - k) + 1.15 * k
+    p["bob"] = p["bob"] * (1 - k) - 18 * k
+    p["lean"] = 8 + 16 * k
+    p["grasp"] = i >= 5
+    # A small knee bend as he leans to the item, not a squash.
+    p["ly"] = 8 * k
+    p["ry"] = 0
+    return p
+
+
+def _screen(x: float, y_up: float) -> tuple[float, float]:
+    return (PIVOT_X + x, PIVOT_Y - y_up)
+
+
+def _knee(hip, ankle, thigh=236, shin=228):
+    dx = ankle[0] - hip[0]
+    dy = ankle[1] - hip[1]
+    dist = math.hypot(dx, dy)
+    dist = max(40.0, min(dist, thigh + shin - 6))
+    ux, uy = dx / dist, dy / dist
+    px, py = -uy, ux
+    cos_a = max(-1.0, min(1.0, (thigh * thigh + dist * dist - shin * shin) / (2 * thigh * dist)))
+    sin_a = math.sqrt(max(0.0, 1 - cos_a * cos_a))
+    base = (hip[0] + ux * thigh * cos_a, hip[1] + uy * thigh * cos_a)
+    k1 = (base[0] + px * thigh * sin_a, base[1] + py * thigh * sin_a)
+    k2 = (base[0] - px * thigh * sin_a, base[1] - py * thigh * sin_a)
+    # The knee leads, toward the direction he faces.
+    return k1 if k1[0] >= k2[0] else k2
+
+
+def _body(pose, view: str) -> dict:
+    """Joint positions in y-up pixels. Front/back squash the stride sideways."""
+    compress = 1.0 if view == "three" else 0.42
+    sign = -1 if view == "back" else 1
+    def fx(x):
+        return sign * x * compress
+    bob = pose["bob"]
+    # Stand over the foot that is on the ground.
+    support_x = pose["lx"] if pose["ly"] <= pose["ry"] else pose["rx"]
+    hip_x = fx(support_x) * 0.12 + pose["lean"] * 0.4
+    hip_y = 488 + bob
+    left_forward = pose["lx"] > pose["rx"]
+    # Shoulders twist against the hips.
+    twist = 22 if left_forward else -22
+    if view == "back":
+        twist = -twist
+    chest_x = hip_x + pose["lean"]
+    chest_y = hip_y + 196
+    return {
+        "hip": (hip_x, hip_y),
+        "chest": (chest_x, chest_y),
+        "neck": (chest_x + 6, chest_y + 78),
+        "sh_l": (chest_x - 78 - twist * 0.3, chest_y + 18),
+        "sh_r": (chest_x + 62 + twist * 0.45, chest_y + 10),
+        "l_foot": (fx(pose["lx"]), pose["ly"], pose["la"]),
+        "r_foot": (fx(pose["rx"]), pose["ry"], pose["ra"]),
+        "view": view,
+    }
+
+
+def _ribbon(a, b, samples):
+    """samples: list of (t, half_width, bulge). Bulge adds to the back edge."""
+    ax, ay = a
+    bx, by = b
+    ang = math.atan2(by - ay, bx - ax)
+    px, py = -math.sin(ang), math.cos(ang)
+    # Back edge is the perpendicular that points more to screen-left.
+    back = 1 if px < 0 else -1
+    left, right = [], []
+    for t, w, bulge in samples:
+        x = ax + (bx - ax) * t
+        y = ay + (by - ay) * t
+        extra = bulge * math.sin(t * math.pi)
+        left.append((x + px * (w + (extra if back > 0 else 0)), y + py * (w + (extra if back > 0 else 0))))
+        right.append((x - px * (w + (extra if back < 0 else 0)), y - py * (w + (extra if back < 0 else 0))))
+    return left + right[::-1]
+
+
+def _shade_poly(fr: Frame, pts, mid, light, dark, mat=1):
+    if len(pts) < 3:
+        return
+    fr.poly(pts, mid, mat, width=3)
+    cx = sum(p[0] for p in pts) / len(pts)
+    cy = sum(p[1] for p in pts) / len(pts)
+    hi = [((p[0] - cx) * 0.5 + cx - 5, (p[1] - cy) * 0.45 + cy - 6) for p in pts]
+    fr.poly(hi, light, mat, outline=False)
+    lo = [((p[0] - cx) * 0.55 + cx + 4, (p[1] - cy) * 0.5 + cy + 5) for p in pts]
+    # Only the lower portion reads as shadow; a full second poly muddies it, so a thin dark edge.
+    fr.draw.line(pts + [pts[0]], fill=dark, width=2)
+    fr.draw.line(pts + [pts[0]], fill=INK, width=3)
+
+
+def _draw_leg(fr: Frame, hip, ankle, foot_angle: float, parts, which: str):
+    knee = _knee(hip, ankle)
+    hs, ks, ans = _screen(*hip), _screen(*knee), _screen(*ankle)
+    thigh = _ribbon(hs, ks, [(0, 48, 4), (0.45, 44, 8), (1, 30, 0)])
+    # Calf is full in the back, narrow at the ankle.
+    calf = _ribbon(ks, ans, [(0, 22, 0), (0.35, 36, 18), (0.7, 26, 8), (1, 15, 0)])
+    _shade_poly(fr, thigh, (96, 80, 70, 255), (132, 114, 100, 255), (48, 38, 34, 255))
+    _shade_poly(fr, calf, (84, 70, 62, 255), (120, 102, 90, 255), (42, 34, 30, 255))
+    # Knee cap.
+    # Knee sits inside the two forms; a separate cap read as a stick-figure joint.
+    key = "shoe_r" if which == "r" else "shoe_l"
+    spr, anc = parts[key]
+    # Positive angle lifts the toe.
+    fr.paste(spr, anc, (ans[0], ans[1] + 4), 1, angle=foot_angle, scale=0.92)
+
+
+def _arm(shoulder, swing: float, reach: float):
+    """swing > 0 reaches forward. Returns elbow and hand in y-up space."""
+    ux = math.sin(swing) * 148
+    uy = -math.cos(min(1.1, abs(swing)) * 0.35) * 36 - 132
+    elbow = (shoulder[0] + ux, shoulder[1] + uy)
+    if reach > 0.05 and swing > 0.4:
+        # Reaching hand: forward and down, eased, not a straight rod.
+        tx = shoulder[0] + 150
+        ty = shoulder[1] - 210
         hand = (
-            shoulder[0] + math.sin(swing) * length + reach * 40,
-            shoulder[1] + math.cos(swing) * length * 0.92 + reach * 30,
+            elbow[0] * (1 - reach) + tx * reach,
+            elbow[1] * (1 - reach) + ty * reach,
         )
         elbow = (
-            (shoulder[0] + hand[0]) / 2 + 10,
-            (shoulder[1] + hand[1]) / 2 - 8,
+            (shoulder[0] + hand[0]) / 2 + 16,
+            (shoulder[1] + hand[1]) / 2 + 10,
         )
-        return shoulder, elbow, hand
-    side = 1 if which == "r" else -1
-    if view == "back":
-        side = -side
-    shoulder = (PIVOT_X + side * 120, _pt(pose, 0, 680, view)[1])
-    hand = (
-        shoulder[0] + side * math.sin(swing) * 40 + (70 if which == "r" else -20),
-        shoulder[1] + 200 - abs(swing) * 30,
-    )
-    elbow = ((shoulder[0] + hand[0]) / 2, (shoulder[1] + hand[1]) / 2)
-    return shoulder, elbow, hand
+    else:
+        bend = 0.55
+        hand = (
+            elbow[0] + math.sin(swing * bend) * 120 + 10,
+            elbow[1] - 118,
+        )
+    return elbow, hand
 
 
-def draw_arm(fr: Frame, a, b, fill):
-    ang = math.atan2(b[1] - a[1], b[0] - a[0])
-    px, py = -math.sin(ang), math.cos(ang)
-    r0, r1 = 18, 12
-    pts = [
-        (a[0] + px * r0, a[1] + py * r0),
-        (b[0] + px * r1, b[1] + py * r1),
-        (b[0] - px * r1, b[1] - py * r1),
-        (a[0] - px * r0, a[1] - py * r0),
-    ]
-    fr.poly(pts, fill, 2, width=3)
+def _draw_arm(fr: Frame, shoulder, elbow, hand, front: bool):
+    ss, es, hs = _screen(*shoulder), _screen(*elbow), _screen(*hand)
+    upper = _ribbon(ss, es, [(0, 24, 2), (0.5, 22, 4), (1, 16, 0)])
+    fore = _ribbon(es, hs, [(0, 16, 0), (0.45, 15, 3), (1, 11, 0)])
+    mid = (186, 140, 86, 255) if front else (150, 108, 64, 255)
+    light = (220, 176, 120, 255) if front else (186, 142, 92, 255)
+    dark = (96, 64, 36, 255)
+    _shade_poly(fr, upper, mid, light, dark, mat=2)
+    _shade_poly(fr, fore, mid, light, dark, mat=2)
+    fr.draw.ellipse((es[0] - 14, es[1] - 12, es[0] + 14, es[1] + 12), fill=mid, outline=INK)
+    fr.draw.ellipse((hs[0] - 13, hs[1] - 10, hs[0] + 14, hs[1] + 12), fill=SKIN, outline=INK)
+    fr.draw.ellipse((hs[0] + 6, hs[1] - 4, hs[0] + 16, hs[1] + 8), fill=SKIN_D, outline=INK)
+    return hs
+
+
+def _coat(fr: Frame, pose, body):
+    hip = body["hip"]
+    chest = body["chest"]
+    hem = pose["hem"]
+    view = body["view"]
+    if view == "three":
+        pts = [
+            _screen(body["sh_l"][0] - 10, body["sh_l"][1] + 10),
+            _screen(chest[0] - 10, chest[1] + 70),
+            _screen(body["sh_r"][0] + 16, body["sh_r"][1] + 6),
+            _screen(chest[0] + 78, chest[1] - 20),
+            _screen(hip[0] + 86, hip[1] - 10),
+            _screen(hip[0] + 70 + hem * 0.35, 168),
+            _screen(hip[0] + 10 + hem * 0.5, 132),
+            _screen(hip[0] - 80 + hem, 150),
+            _screen(hip[0] - 96, hip[1] + 10),
+        ]
+    elif view == "front":
+        cx = PIVOT_X + pose["lean"] * 0.3
+        top = _screen(0, chest[1] + 40)[1]
+        bot = _screen(0, 150 + pose["bob"])[1]
+        sway = pose["hem"] * 0.25
+        pts = [
+            (cx - 150, top), (cx + 150, top),
+            (cx + 160 + sway, bot), (cx + 28, bot + 24),
+            (cx - 28, bot + 18), (cx - 160 + sway, bot),
+        ]
+    else:
+        cx = PIVOT_X
+        top = _screen(0, chest[1] + 30)[1]
+        bot = _screen(0, 160 + pose["bob"])[1]
+        sway = -pose["hem"] * 0.25
+        pts = [
+            (cx - 146, top), (cx + 146, top),
+            (cx + 154 + sway, bot), (cx - 154 + sway, bot),
+        ]
+    _shade_poly(fr, pts, (176, 132, 78, 255), (214, 172, 116, 255), (92, 62, 36, 255), mat=2)
+    # Back panel and a chest fold, so the coat has a front and a side.
+    if view == "three" and len(pts) >= 8:
+        back = [pts[0], pts[8], pts[7], (pts[7][0] + 36, pts[7][1] - 30), (pts[0][0] + 28, pts[0][1] + 40)]
+        fr.poly(back, (132, 94, 56, 255), 2, outline=False)
+        fr.draw.line([pts[2], pts[4], pts[5]], fill=(110, 74, 44, 255), width=4)
+        # Ragged hem.
+        for p in (pts[5], pts[6], pts[7]):
+            fr.draw.polygon([p, (p[0] + 12, p[1] + 18), (p[0] - 10, p[1] + 12)], fill=(120, 84, 48, 255), outline=INK)
+    elif view != "three":
+        # Centre opening.
+        top = pts[0]
+        bot = pts[3] if view == "front" else pts[2]
+        fr.draw.line([(PIVOT_X, top[1] + 20), (PIVOT_X + pose["hem"] * 0.2, bot[1])], fill=(110, 74, 44, 255), width=6)
+    fr.draw.line(pts + [pts[0]], fill=INK, width=4)
+
+
+def _simple_head(fr: Frame, pose, view: str, body):
+    cx, top = _screen(*body["neck"])
+    crown = top - 150
+    if view == "front":
+        fr.draw.polygon(
+            [(cx - 54, crown + 36), (cx + 54, crown + 36), (cx + 36, crown - 8), (cx - 36, crown - 8)],
+            fill=(132, 92, 52, 255), outline=INK,
+        )
+        fr.draw.polygon(
+            [(cx - 108, crown + 34), (cx + 108, crown + 34), (cx + 108, crown + 52), (cx - 108, crown + 52)],
+            fill=(78, 52, 32, 255), outline=INK,
+        )
+        fr.draw.ellipse((cx - 52, crown + 28, cx + 52, crown + 130), fill=SKIN, outline=INK)
+        fr.draw.ellipse((cx - 46, crown + 18, cx + 46, crown + 70), fill=(48, 32, 26, 255))
+        for dx in (-22, 22):
+            fr.draw.ellipse((cx + dx - 16, crown + 62, cx + dx + 16, crown + 92), fill=(252, 248, 240, 255), outline=INK)
+            fr.draw.ellipse((cx + dx - 6, crown + 70, cx + dx + 7, crown + 86), fill=(36, 24, 20, 255))
+        fr.draw.polygon([(cx, crown + 78), (cx - 12, crown + 108), (cx + 12, crown + 108)], fill=SKIN_D, outline=INK)
+        fr.draw.arc((cx - 20, crown + 108, cx + 22, crown + 132), 15, 165, fill=INK, width=3)
+    else:
+        fr.draw.ellipse((cx - 58, crown + 8, cx + 58, crown + 78), fill=(122, 84, 48, 255), outline=INK)
+        fr.draw.polygon(
+            [(cx - 100, crown + 58), (cx + 100, crown + 58), (cx + 100, crown + 76), (cx - 100, crown + 76)],
+            fill=(62, 42, 28, 255), outline=INK,
+        )
+        fr.draw.ellipse((cx - 40, crown + 24, cx + 40, crown + 100), fill=(42, 28, 22, 255))
+        # Scarf tail down the back.
+        fr.draw.polygon(
+            [(cx - 16, crown + 90), (cx + 16, crown + 90), (cx + 8 + pose["scarf"] * 0.2, crown + 210), (cx - 10, crown + 200)],
+            fill=(120, 36, 40, 255), outline=INK,
+        )
 
 
 def paint(pose, view: str, parts) -> Frame:
     fr = Frame()
-    head, chin = parts["head"]
-    # Far limbs first.
-    order = ("l", "r") if view != "back" else ("r", "l")
-    shoes = []
-    for which in order:
-        tubes, (foot, angle) = leg(pose, which, view)
-        for tube in tubes:
-            fr.poly(tube, TROUSER if which == "r" else TROUSER_D, 1, width=3)
-        shoes.append((which, foot, angle))
-    coat = coat_polygon(pose, view)
-    fr.poly(coat, COAT, 2, width=5)
-    # A lighter lapel so the coat is not a flat board.
-    if view == "three" and len(coat) >= 4:
-        lapel = [coat[2], coat[3], (coat[3][0] - 18, coat[3][1] - 10), (coat[2][0] - 8, coat[2][1] + 20)]
-        fr.poly(lapel, COAT_L, 2, outline=False)
-    # Ragged nicks along the hem.
-    if view == "three":
-        hem_pts = coat[4:7]
-        for i, p in enumerate(hem_pts):
-            fr.draw.polygon([
-                p,
-                (p[0] + 10, p[1] + 16),
-                (p[0] - 8, p[1] + 10),
-            ], fill=COAT_D)
-    # The real plaid scarf, swung as a piece. A short drawn tail follows a beat later.
-    ribbon = scarf_ribbon(pose, view)
-    fr.draw.line(ribbon, fill=(110, 32, 36, 255), width=22)
-    fr.draw.line(ribbon[1:], fill=(28, 18, 18, 255), width=6)
-    fr.draw.line(ribbon, fill=INK, width=2)
+    body = _body(pose, view)
+    hip = body["hip"]
+    # Far leg first (the one further back, smaller x in a right-facing 3/4).
+    legs = [("l", body["l_foot"]), ("r", body["r_foot"])]
+    legs.sort(key=lambda item: item[1][0])
+    back_name, back_foot = legs[0]
+    front_name, front_foot = legs[1]
+    _draw_leg(fr, hip, (back_foot[0], back_foot[1]), back_foot[2], parts, back_name)
+    # Back arm, then the coat, then the near leg so the stride reads in front.
+    back_arm = "l" if back_name == "l" else "r"
+    sh = body["sh_l"] if back_arm == "l" else body["sh_r"]
+    swing = pose["arm_l"] if back_arm == "l" else pose["arm_r"]
+    reach = pose["reach"] if back_arm == "l" else 0.0
+    elbow, hand = _arm(sh, swing, reach)
+    _draw_arm(fr, sh, elbow, hand, front=False)
+    _coat(fr, pose, body)
+    _draw_leg(fr, hip, (front_foot[0], front_foot[1]), front_foot[2], parts, front_name)
+    # Real scarf, plus a short trailing tail.
     if view == "three":
         scarf_im, scarf_anc = parts["scarf"]
-        fr.paste(scarf_im, scarf_anc, _pt(pose, 8 + pose["scarf"] * 0.15, 560, view), 4, angle=pose["scarf"] * 0.25, scale=0.95)
-    # Bag on the left shoulder, rigid painting, swung by the scarf lag.
-    bag, bag_anchor = parts["bag"]
-    if view == "three":
-        bag_at = _pt(pose, -70 + pose["scarf"] * 0.2, 460, view)
-        fr.paste(bag, bag_anchor, bag_at, 5, angle=pose["scarf"] * 0.15, scale=0.92)
-    elif view == "front":
-        fr.paste(bag, bag_anchor, (PIVOT_X - 150, _pt(pose, 0, 460, view)[1]), 5, scale=0.8)
+        fr.paste(
+            scarf_im, scarf_anc,
+            _screen(body["chest"][0] - 6 + pose["scarf"] * 0.15, body["chest"][1] - 20),
+            4, angle=pose["scarf"] * 0.2, scale=0.92,
+        )
+        bag, bag_anc = parts["bag"]
+        fr.paste(bag, bag_anc, _screen(hip[0] - 78 + pose["hem"] * 0.12, hip[1] - 30), 5, angle=pose["hem"] * 0.12, scale=0.9)
+        head, chin = parts["head"]
+        fr.paste(head, chin, _screen(body["neck"][0] + 8, body["neck"][1] - 8), 3, scale=1.0)
     else:
-        fr.paste(bag, bag_anchor, (PIVOT_X + 130, _pt(pose, 0, 470, view)[1]), 5, scale=0.8)
-    # Shoes, rigid, planted on the new ankles.
-    for which, foot, angle in shoes:
-        key = "shoe_r" if which == "r" else "shoe_l"
-        spr, anc = parts[key]
-        # The cut shoe's anchor is its sole. Sit that on the foot point.
-        fr.paste(spr, anc, (foot[0], foot[1] + 8), 1, angle=max(-28, min(28, angle * 0.35)), scale=0.85)
-    # Arms. Lantern arm is the right one.
-    for which in order:
-        sh, el, hand = arm_joints(pose, which, view)
-        draw_arm(fr, sh, el, COAT_D if which == "l" else COAT)
-        draw_arm(fr, el, hand, COAT)
-        if which == "l":
-            fr.draw.ellipse((hand[0] - 11, hand[1] - 8, hand[0] + 11, hand[1] + 12), fill=SKIN, outline=INK)
-            if pose.get("grasp"):
-                fr.draw.ellipse((hand[0] - 4, hand[1] + 6, hand[0] + 16, hand[1] + 22), fill=(196, 154, 64, 255), outline=INK)
-    # Head. The 3/4 painting on the side cycle; a matching hat-and-face for front.
+        _simple_head(fr, pose, view, body)
+        bag, bag_anc = parts["bag"]
+        side = -1 if view == "front" else 1
+        fr.paste(bag, bag_anc, _screen(side * 120, hip[1] - 10), 5, scale=0.78)
+    front_arm = "r" if back_arm == "l" else "l"
+    # Lantern arm is always the character's right, drawn in front on the side view.
     if view == "three":
-        neck = _pt(pose, 30, 640, view)
-        fr.paste(head, chin, (neck[0], neck[1] + 36), 3, scale=1.0)
+        sh = body["sh_r"]
+        elbow, hand = _arm(sh, pose["arm_r"], 0.0)
+        hand_s = _draw_arm(fr, sh, elbow, hand, front=True)
+        lantern, lanc = parts["lantern"]
+        fr.paste(lantern, lanc, hand_s, 6, angle=-pose["arm_r"] * 10, scale=0.8)
+        if pose.get("grasp"):
+            sh = body["sh_l"]
+            _, hand = _arm(sh, pose["arm_l"], pose["reach"])
+            hs = _screen(*hand)
+            fr.draw.ellipse((hs[0] - 6, hs[1] + 8, hs[0] + 18, hs[1] + 26), fill=(196, 154, 64, 255), outline=INK)
     else:
-        _simple_head(fr, pose, view)
-    sh, el, hand = arm_joints(pose, "r", view)
-    lantern, lanc = parts["lantern"]
-    fr.paste(lantern, lanc, hand, 6, angle=pose["arm_r"] * -8, scale=0.78)
+        for which, front in (("l", view == "front"), ("r", True)):
+            sh = body["sh_l"] if which == "l" else body["sh_r"]
+            elbow, hand = _arm(sh, pose["arm_l"] if which == "l" else pose["arm_r"], 0.0)
+            hs = _draw_arm(fr, sh, elbow, hand, front=front)
+            if which == "r":
+                lantern, lanc = parts["lantern"]
+                fr.paste(lantern, lanc, hs, 6, scale=0.72)
     _contour(fr)
     return fr
 
-
-_COAT_TEX = None
-
-
-def _coat_tex() -> np.ndarray:
-    global _COAT_TEX
-    if _COAT_TEX is None:
-        coat = np.array(Image.open(LAYERS / "detective-coat-tan.png").convert("RGBA"))
-        # A patch of the real painted cloth, used inside each new coat shape.
-        _COAT_TEX = coat[280:820, 40:360]
-    return _COAT_TEX
-
-
-def _paint_coat(fr: Frame, pts):
-    """Put the original coat's paint inside this frame's new silhouette."""
-    if len(pts) < 3:
-        return
-    mask = Image.new("L", (CELL_W, CELL_H), 0)
-    ImageDraw.Draw(mask).polygon(pts, fill=255)
-    m = np.array(mask) > 0
-    tex = _coat_tex()
-    th, tw = tex.shape[:2]
-    ys, xs = np.where(m)
-    if len(xs) == 0:
-        return
-    # Stable cloth coordinates so the brushwork does not swim, while the outline is new.
-    # One placement of the real cloth, clipped by this frame's outline. No tiled shear.
-    tx = xs - (PIVOT_X - 160)
-    ty = ys - 220
-    inside = (tx >= 0) & (tx < tw) & (ty >= 0) & (ty < th)
-    tx = np.clip(tx, 0, tw - 1)
-    ty = np.clip(ty, 0, th - 1)
-    sample = tex[ty, tx]
-    use = inside & (sample[:, 3] > 40)
-    arr = np.array(fr.im)
-    sel_y, sel_x = ys[use], xs[use]
-    arr[sel_y, sel_x] = sample[use]
-    fr.im = Image.fromarray(arr)
-    fr.draw = ImageDraw.Draw(fr.im)
-    fr.draw.line(pts + [pts[0]], fill=INK, width=5)
-
-
-def _simple_head(fr: Frame, pose, view: str):
-    cx = PIVOT_X
-    top = _pt(pose, 0, 980, view)[1]
-    if view == "front":
-        # Fedora and the same big eyes, drawn for this view rather than bent from the side painting.
-        fr.draw.polygon([(cx - 70, top + 70), (cx + 70, top + 70), (cx + 48, top + 10), (cx - 48, top + 10)], fill=(122, 84, 48, 255), outline=INK)
-        fr.draw.polygon([(cx - 120, top + 78), (cx + 120, top + 78), (cx + 120, top + 96), (cx - 120, top + 96)], fill=(92, 62, 36, 255), outline=INK)
-        fr.draw.ellipse((cx - 58, top + 64, cx + 58, top + 170), fill=SKIN, outline=INK)
-        for dx in (-26, 26):
-            fr.draw.ellipse((cx + dx - 14, top + 100, cx + dx + 14, top + 128), fill=(250, 246, 236, 255), outline=INK)
-            fr.draw.ellipse((cx + dx - 5, top + 108, cx + dx + 6, top + 122), fill=(40, 28, 24, 255))
-        fr.draw.polygon([(cx, top + 112), (cx - 10, top + 140), (cx + 10, top + 140)], fill=SKIN_D, outline=INK)
-        fr.draw.arc((cx - 18, top + 142, cx + 18, top + 162), 10, 170, fill=INK, width=3)
-    else:
-        fr.draw.ellipse((cx - 70, top + 20, cx + 70, top + 90), fill=(122, 84, 48, 255), outline=INK)
-        fr.draw.polygon([(cx - 110, top + 70), (cx + 110, top + 70), (cx + 110, top + 88), (cx - 110, top + 88)], fill=(70, 48, 30, 255), outline=INK)
-        fr.draw.ellipse((cx - 46, top + 40, cx + 46, top + 120), fill=(48, 32, 26, 255))
 
 
 def _contour(fr: Frame):
@@ -566,10 +609,15 @@ def seal(im: Image.Image) -> Image.Image:
     empty = np.where(a == 0, np.uint8(255), np.uint8(0))
     flood = empty.copy()
     cv2.floodFill(flood, np.zeros((arr.shape[0] + 2, arr.shape[1] + 2), np.uint8), (0, 0), 0)
-    hole = flood > 0
+    # Only pinholes. A gap between the arm and the coat is supposed to stay clear.
+    n, labels, stats, _ = cv2.connectedComponentsWithStats((flood > 0).astype(np.uint8), 8)
+    hole = np.zeros(flood.shape, bool)
+    for i in range(1, n):
+        if stats[i, cv2.CC_STAT_AREA] <= 48:
+            hole |= labels == i
     if hole.any():
         rgb = arr[:, :, :3]
-        for _ in range(8):
+        for _ in range(6):
             grown = cv2.dilate(rgb, np.ones((3, 3), np.uint8))
             ga = cv2.dilate(a, np.ones((3, 3), np.uint8))
             take = hole & (a == 0) & (ga > 0)
