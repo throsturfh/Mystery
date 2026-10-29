@@ -54,7 +54,7 @@ export class StreetScene extends Phaser.Scene {
     this.hero = this.add.sprite(this.x, 640, idleKey(profile)).setOrigin(0.5, 1).setScale(0.28);
     this.hero.on(Phaser.Animations.Events.ANIMATION_UPDATE, (_anim: Phaser.Animations.Animation, frame: Phaser.Animations.AnimationFrame) => {
       if (loadSave().detective !== 'crowe' || this.done) return;
-      if (frame.index === 0 || frame.index === 6) audio.play('foot');
+      if (frame.index === 1 || frame.index === 7) audio.play('foot');
     });
     if (save.detective === 'sara' && this.textures.exists('skuggi')) {
       this.add.image(this.x - 70, 648, 'skuggi').setOrigin(0.5, 1).setScale(0.28).setName('skuggi');

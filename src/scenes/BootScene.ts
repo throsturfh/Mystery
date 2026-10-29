@@ -77,6 +77,7 @@ export class BootScene extends Phaser.Scene {
       frames: Array.from({ length: EDMUND_WALK_FRAMES }, (_, index) => ({ key: edmundFrameKey(index) })),
       frameRate: EDMUND_WALK_FPS,
       repeat: -1,
+      skipMissedFrames: false,
     });
     audio.bind(this);
     this.scene.start('title');

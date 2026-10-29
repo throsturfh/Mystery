@@ -41,7 +41,9 @@ export function edmundSpeed(y: number): number {
 
 export function playEdmundWalk(sprite: Phaser.GameObjects.Sprite, y: number): void {
   const anims = sprite.anims;
-  if (!anims.isPlaying || anims.currentAnim?.key !== EDMUND_WALK_KEY) sprite.play(EDMUND_WALK_KEY);
+  if (!anims.isPlaying || anims.currentAnim?.key !== EDMUND_WALK_KEY) {
+    sprite.play({ key: EDMUND_WALK_KEY, repeat: -1 });
+  }
   sprite.setOrigin(EDMUND_ORIGIN_X, EDMUND_ORIGIN_Y);
   sprite.setScale(edmundScale(y));
 }

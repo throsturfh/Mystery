@@ -16,7 +16,8 @@ const config: Phaser.Types.Core.GameConfig = {
   height: H,
   backgroundColor: '#140e0a',
   banner: false,
-  fps: { target: 60, forceSetTimeOut: true },
+  // rAF, so a walk step lands on every paint. setTimeout was updating between frames and Edmund jumped.
+  fps: { target: 60, forceSetTimeOut: false },
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,

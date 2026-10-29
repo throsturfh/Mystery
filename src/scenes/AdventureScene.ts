@@ -130,7 +130,7 @@ export class AdventureScene extends Phaser.Scene {
     this.hero = this.add.sprite(0, 0, 'hero').setOrigin(0.5, 1).setDepth(700);
     this.hero.on(Phaser.Animations.Events.ANIMATION_UPDATE, (_anim: Phaser.Animations.Animation, frame: Phaser.Animations.AnimationFrame) => {
       if (this.save.detective !== 'crowe' || !this.walking) return;
-      if (frame.index === 0 || frame.index === 6) audio.play('foot');
+      if (frame.index === 1 || frame.index === 7) audio.play('foot');
     });
     this.hudGfx = this.add.graphics().setDepth(2000);
     this.caption = this.add
@@ -783,6 +783,7 @@ export class AdventureScene extends Phaser.Scene {
     const look = this.profile();
     const croweWalk = this.save.detective === 'crowe' && this.walking && !posing;
     if (croweWalk) {
+      // One scale for the whole cycle. Fitting each frame to its own opaque height pulsed him.
       playEdmundWalk(this.hero, this.fy);
     } else {
       if (this.save.detective === 'crowe') stopEdmundWalk(this.hero);
@@ -797,7 +798,6 @@ export class AdventureScene extends Phaser.Scene {
     }
     const breath = this.walking ? 0 : Math.sin(this.time.now / 980) * 1.1;
     const gesture = this.gesture(this.time.now);
-    this.fit(this.hero, this.fy);
     this.hero.setPosition(this.fx, this.fy + breath + gesture.y);
     this.hero.setFlipX(this.face < 0);
     this.hero.setAngle(gesture.angle);
