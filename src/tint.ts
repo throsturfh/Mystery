@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { EDMUND, readEdmundSet, type EdmundSet } from './edmundTest';
 import { strideCount } from './figure';
 import type { Profile } from './profile';
 
@@ -43,15 +44,54 @@ function compose(scene: Phaser.Scene, outKey: string, frame: string, profile: Pr
   if (!scene.textures.exists(outKey)) scene.textures.addCanvas(outKey, canvas);
 }
 
+function pasteEdmund(scene: Phaser.Scene, set: EdmundSet, index: number, outKey: string): void {
+  const sheet = scene.textures.get(`edmund-${set}`);
+  if (!sheet || sheet.key === '__MISSING') return;
+  const frame = sheet.get(index);
+  const image = frame.source.image as CanvasImageSource;
+  const canvas = document.createElement('canvas');
+  canvas.width = EDMUND.cellW;
+  canvas.height = EDMUND.cellH;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.drawImage(image, frame.cutX, frame.cutY, frame.cutWidth, frame.cutHeight, 0, 0, EDMUND.cellW, EDMUND.cellH);
+  if (scene.textures.exists(outKey)) {
+    const existing = scene.textures.get(outKey).getSourceImage();
+    if (existing instanceof HTMLCanvasElement) {
+      if (existing.width !== canvas.width || existing.height !== canvas.height) {
+        existing.width = canvas.width;
+        existing.height = canvas.height;
+      }
+      const live = existing.getContext('2d');
+      live?.clearRect(0, 0, existing.width, existing.height);
+      live?.drawImage(canvas, 0, 0);
+      (scene.textures.get(outKey) as Phaser.Textures.CanvasTexture).refresh();
+      return;
+    }
+  }
+  if (!scene.textures.exists(outKey)) scene.textures.addCanvas(outKey, canvas);
+}
+
 /** One standing portrait, for the detective picker. Does not touch the walk cycle. */
 export function paintPortrait(scene: Phaser.Scene, profile: Profile, outKey: string): void {
+  if (profile.detective === 'crowe' && scene.textures.exists('edmund-a')) {
+    pasteEdmund(scene, 'a', EDMUND.idle.start, outKey);
+    return;
+  }
   compose(scene, outKey, 'detective', profile);
 }
 
 /** Stack pre-painted body, coat, scarf and hat. No runtime colour masking. */
 export function paintHero(scene: Phaser.Scene, profile: Profile): void {
+  const who = profile.detective || 'crowe';
+  const set = readEdmundSet();
+  if (who === 'crowe' && scene.textures.exists(`edmund-${set}`)) {
+    pasteEdmund(scene, set, EDMUND.idle.start, 'hero');
+    for (let i = 0; i < EDMUND.side.count; i++) pasteEdmund(scene, set, EDMUND.side.start + i, `hero-${i}`);
+    return;
+  }
   compose(scene, 'hero', 'detective', profile);
-  const frames = strideCount(profile.detective || 'crowe');
+  const frames = strideCount(who);
   for (let i = 0; i < frames; i++) compose(scene, `hero-${i}`, `walk-${i}`, profile);
 }
 

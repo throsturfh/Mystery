@@ -22,6 +22,7 @@ import {
   type Verb,
 } from '../story';
 import { detectiveById } from '../detectives';
+import { EDMUND, clipFor, edmundDemo, edmundPixels, readEdmundSet, writeEdmundSet, type EdmundFacing, type EdmundSet } from '../edmundTest';
 import { figurePixels, opaqueHeight, strideCount } from '../figure';
 import { idleKey, paintHero, walkKey } from '../tint';
 import { aside } from '../voices';
@@ -93,6 +94,16 @@ export class AdventureScene extends Phaser.Scene {
   private cardResolve: (() => void) | null = null;
   private overlay: Phaser.GameObjects.GameObject[] = [];
   private departing = false;
+  private edmundSet: EdmundSet = 'a';
+  private edmundFacing: EdmundFacing = 'side';
+  private edmundSpan = 0;
+  private edmundSole: number = EDMUND.pivotY;
+  private takeFrom = 0;
+  private takeUntil = 0;
+  private weight?: Phaser.GameObjects.Image;
+  private officeFx!: Phaser.GameObjects.Graphics;
+  private testLabelA!: Phaser.GameObjects.Text;
+  private testLabelB!: Phaser.GameObjects.Text;
 
   constructor() {
     super('adventure');
@@ -119,6 +130,18 @@ export class AdventureScene extends Phaser.Scene {
     this.walking = false;
     this.goal = null;
     this.save = loadSave();
+    const params = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
+    if (params.has('demo') || params.has('still')) {
+      this.save.detective = 'crowe';
+      this.save.room = 'office';
+      this.save.coat = 'tan';
+      this.save.hat = 'brown';
+      this.save.scarf = 'plaid';
+      this.save.x = params.has('still') ? 320 : 340;
+      this.save.y = params.has('still') ? 512 : 545;
+      this.save.face = params.has('still') ? -1 : 1;
+    }
+    this.edmundSet = readEdmundSet();
     this.fx = this.save.x;
     this.fy = this.save.y;
     this.face = this.save.face;
@@ -126,7 +149,23 @@ export class AdventureScene extends Phaser.Scene {
     audio.ambient(this.save.room);
     this.ctx = this.makeCtx();
     this.shadow = this.add.ellipse(0, 0, 86, 18, 0x000000, 0.35).setDepth(90);
-    this.hero = this.add.image(0, 0, 'detective').setOrigin(0.5, 1).setDepth(700);
+    this.hero = this.add.image(0, 0, 'hero').setOrigin(0.5, 1).setDepth(700);
+    this.officeFx = this.add.graphics().setDepth(20);
+    this.testLabelA = this.add.text(470, 14, 'Test A', {
+      fontFamily: DISPLAY,
+      fontSize: '16px',
+      color: '#f6edd6',
+      stroke: '#140e0a',
+      strokeThickness: 3,
+    }).setDepth(2400).setResolution(2);
+    this.testLabelB = this.add.text(590, 14, 'Test B', {
+      fontFamily: DISPLAY,
+      fontSize: '16px',
+      color: '#f6edd6',
+      stroke: '#140e0a',
+      strokeThickness: 3,
+    }).setDepth(2400).setResolution(2);
+    this.refreshTestLabels();
     this.hudGfx = this.add.graphics().setDepth(2000);
     this.caption = this.add
       .text(500, 672, '', {
@@ -232,7 +271,9 @@ export class AdventureScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     if (this.departing || !this.scene.isActive() || !this.hero?.active) return;
     const dt = Math.min(0.05, delta / 1000);
-    if (this.walking && this.goal) {
+    if (this.walking && this.goal && this.isEdmund()) {
+      this.stepEdmund(dt);
+    } else if (this.walking && this.goal) {
       const dx = this.goal.x - this.fx;
       const dy = this.goal.y - this.fy;
       const dist = Math.hypot(dx, dy);
@@ -257,6 +298,7 @@ export class AdventureScene extends Phaser.Scene {
       }
     }
     this.drawFog(dt);
+    this.drawOfficeLife();
     this.drawHero(dt);
     this.drawDog();
     const talking = this.mode === 'speech' || this.mode === 'choice' || this.mode === 'card' || this.mode === 'menu' || this.mode === 'confirm';
@@ -291,6 +333,7 @@ export class AdventureScene extends Phaser.Scene {
         this.poseFrom = this.time.now;
         const hold = kind === 'write' ? 980 : kind === 'pick' || kind === 'shelf' ? 640 : 520;
         this.poseUntil = this.time.now + hold;
+        if (this.isEdmund() && (kind === 'pick' || kind === 'receive')) this.beginTake();
       },
       refresh: () => this.refresh(),
       showGhost: (on) => this.showGhost(on),
@@ -344,7 +387,11 @@ export class AdventureScene extends Phaser.Scene {
     }
     this.busyScript = true;
     try {
-      await onEnter(this.ctx);
+      const recording = typeof location !== 'undefined' && new URLSearchParams(location.search).has('still');
+      if (edmundDemo() && this.save.room === 'office' && this.save.detective === 'crowe') await this.runDemo();
+      else if (recording) {
+        /* Hold the door-scale pose. No case dialogue over the still. */
+      } else await onEnter(this.ctx);
     } catch (err) {
       console.error(err);
     } finally {
@@ -403,6 +450,7 @@ export class AdventureScene extends Phaser.Scene {
   private drawRoom(): void {
     hideCreatorField();
     this.killProps();
+    this.weight = undefined;
     this.envelope?.destroy();
     this.envelope = undefined;
     const room = this.save.room;
@@ -435,6 +483,7 @@ export class AdventureScene extends Phaser.Scene {
     this.placeScenery();
     this.placeSpirit();
     this.spots = spotsFor(this.save, room);
+    this.refreshTestLabels();
     this.syncGhost();
     this.ensureEndingDressing();
     this.redrawHud();
@@ -445,7 +494,7 @@ export class AdventureScene extends Phaser.Scene {
     this.plaque.setVisible(show);
     this.lane.setVisible(show);
     if (show && !this.envelope) {
-      this.envelope = this.add.image(1008, 448, 'prop-letter').setDepth(30).setScale(0.4);
+      this.envelope = this.add.image(1048, 392, 'prop-letter').setDepth(30).setScale(0.4);
     }
     if (!show && this.envelope) {
       this.envelope.destroy();
@@ -713,6 +762,10 @@ export class AdventureScene extends Phaser.Scene {
     const room = this.save.room;
     const has = (id: 'pencil' | 'matches' | 'book' | 'ledger') => this.save.items.includes(id);
     const f = this.save.flags;
+    if (room === 'office') {
+      this.weight = this.add.image(210, 458, 'prop-weight').setDepth(48);
+      this.props.push(this.weight);
+    }
     if (room === 'shop') {
       this.addScenery('shelf-green', 498, 198, 0.5, 1, 16, () => f.bookShelved === true, 0.62);
       this.addScenery('prop-pencil', 972, 372, 0.45, 0.82, 16, () => !has('pencil'), 0.28);
@@ -751,7 +804,9 @@ export class AdventureScene extends Phaser.Scene {
   private fit(image: Phaser.GameObjects.Image, y: number, portion = 1): void {
     const source = image.texture.getSourceImage() as CanvasImageSource;
     const height = opaqueHeight(source, image.texture.key);
-    image.setScale((figurePixels(y) * portion) / height);
+    const room = this.save?.room ?? 'office';
+    const target = image === this.hero && this.isEdmund() ? edmundPixels(y, room, figurePixels(y)) : figurePixels(y);
+    image.setScale((target * portion) / height);
   }
 
   private gesture(now: number): { angle: number; y: number } {
@@ -773,26 +828,228 @@ export class AdventureScene extends Phaser.Scene {
   private drawHero(_dt: number): void {
     const posing = this.time.now < this.poseUntil;
     if (!posing) this.pose = 'none';
-    const look = this.profile();
-    if (this.walking && !posing) {
-      const key = walkKey(look, this.walkFrame);
-      if (this.hero.texture.key !== key && this.textures.exists(key)) this.hero.setTexture(key);
+    const taking = this.time.now < this.takeUntil;
+    if (this.isEdmund()) {
+      this.drawEdmund(taking);
     } else {
-      const key = idleKey(look);
-      if (this.hero.texture.key !== key) this.hero.setTexture(key);
+      const look = this.profile();
+      if (this.walking && !posing) {
+        const key = walkKey(look, this.walkFrame);
+        if (this.hero.texture.key !== key && this.textures.exists(key)) this.hero.setTexture(key);
+      } else {
+        const key = idleKey(look);
+        if (this.hero.texture.key !== key) this.hero.setTexture(key);
+      }
+      const breath = this.walking ? 0 : Math.sin(this.time.now / 980) * 1.1;
+      const gesture = this.gesture(this.time.now);
+      this.hero.setOrigin(0.5, 1);
+      this.fit(this.hero, this.fy);
+      this.hero.setPosition(this.fx, this.fy + breath + gesture.y);
+      this.hero.setFlipX(this.face < 0);
+      this.hero.setAngle(gesture.angle);
     }
-    const breath = this.walking ? 0 : Math.sin(this.time.now / 980) * 1.1;
-    const gesture = this.gesture(this.time.now);
-    this.fit(this.hero, this.fy);
-    this.hero.setPosition(this.fx, this.fy + breath + gesture.y);
-    this.hero.setFlipX(this.face < 0);
-    this.hero.setAngle(gesture.angle);
     this.hero.setAlpha(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 0.55 : 1);
     this.hero.setDepth(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 900 : 500 + this.fy);
     this.shadow.setPosition(this.fx, this.fy + 2);
-    const shadow = figurePixels(this.fy) / 320;
+    const shadow = (this.isEdmund() ? edmundPixels(this.fy, this.save.room, figurePixels(this.fy)) : figurePixels(this.fy)) / 245;
     this.shadow.setScale(shadow, shadow * 0.85);
     this.shadow.setAlpha(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 0.15 : 0.35);
+  }
+
+  private drawEdmund(taking: boolean): void {
+    const key = `edmund-${this.edmundSet}`;
+    let index = EDMUND.idle.start;
+    let flip = this.face < 0;
+    if (taking) {
+      const span = Math.max(1, this.takeUntil - this.takeFrom);
+      const frame = Math.min(EDMUND.take.count - 1, Math.floor(((this.time.now - this.takeFrom) / span) * EDMUND.take.count));
+      index = EDMUND.take.start + frame;
+      if (frame >= EDMUND.take.grasp && this.weight?.active) this.weight.setVisible(false);
+    } else if (this.walking) {
+      const clip = clipFor(this.edmundFacing);
+      index = clip.start + (this.walkFrame % clip.count);
+      flip = this.edmundFacing === 'side' && this.face < 0;
+    } else {
+      const frame = Math.floor((this.time.now / 1000) * EDMUND.idle.fps) % EDMUND.idle.count;
+      index = EDMUND.idle.start + frame;
+    }
+    if (this.hero.texture.key !== key || this.hero.frame.name !== String(index)) this.hero.setTexture(key, index);
+    this.spanOfEdmund();
+    this.hero.setOrigin(EDMUND.pivotX / EDMUND.cellW, this.edmundSole / EDMUND.cellH);
+    const px = edmundPixels(this.fy, this.save.room, figurePixels(this.fy));
+    this.hero.setScale(px / this.spanOfEdmund());
+    this.hero.setPosition(this.fx, this.fy);
+    this.hero.setFlipX(flip);
+    this.hero.setAngle(0);
+  }
+
+  /** Hat-top to the sole pivot, measured once so every pose shares a scale. */
+  private spanOfEdmund(): number {
+    if (this.edmundSpan > 0) return this.edmundSpan;
+    const tex = this.textures.get(`edmund-${this.edmundSet}`);
+    const frame = tex.get(EDMUND.idle.start);
+    const image = frame.source.image as CanvasImageSource;
+    const canvas = document.createElement('canvas');
+    canvas.width = EDMUND.cellW;
+    canvas.height = EDMUND.cellH;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return EDMUND.pivotY;
+    ctx.drawImage(image, frame.cutX, frame.cutY, frame.cutWidth, frame.cutHeight, 0, 0, EDMUND.cellW, EDMUND.cellH);
+    const data = ctx.getImageData(0, 0, EDMUND.cellW, EDMUND.cellH).data;
+    let top = 0;
+    let bottom: number = EDMUND.pivotY;
+    for (let y = 0; y < EDMUND.cellH; y++) {
+      let hit = false;
+      for (let x = 0; x < EDMUND.cellW; x += 3) {
+        if (data[(y * EDMUND.cellW + x) * 4 + 3] > 24) {
+          hit = true;
+          break;
+        }
+      }
+      if (hit) {
+        top = y;
+        break;
+      }
+    }
+    for (let y = EDMUND.cellH - 1; y >= 0; y--) {
+      let hit = false;
+      for (let x = 0; x < EDMUND.cellW; x += 3) {
+        if (data[(y * EDMUND.cellW + x) * 4 + 3] > 24) {
+          hit = true;
+          break;
+        }
+      }
+      if (hit) {
+        bottom = y;
+        break;
+      }
+    }
+    this.edmundSole = bottom;
+    this.edmundSpan = Math.max(1, bottom - top);
+    return this.edmundSpan;
+  }
+
+  private isEdmund(): boolean {
+    return this.save?.detective === 'crowe' && this.textures.exists(`edmund-${this.edmundSet}`);
+  }
+
+  private beginTake(): void {
+    this.takeFrom = this.time.now;
+    this.takeUntil = this.time.now + (EDMUND.take.count / EDMUND.take.fps) * 1000;
+    this.poseUntil = this.takeUntil;
+  }
+
+  private wait(ms: number): Promise<void> {
+    return new Promise((resolve) => this.time.delayedCall(ms, resolve));
+  }
+
+  private playTake(): Promise<void> {
+    this.walking = false;
+    this.goal = null;
+    this.beginTake();
+    return new Promise((resolve) => {
+      this.time.delayedCall(this.takeUntil - this.takeFrom, () => resolve());
+    });
+  }
+
+  private stepEdmund(dt: number): void {
+    if (!this.goal) return;
+    const facing = this.edmundAim();
+    if (facing !== this.edmundFacing) {
+      this.edmundFacing = facing;
+      this.walkFrame = 0;
+      this.stride = 0;
+    }
+    const clip = clipFor(facing);
+    const dx = this.goal.x - this.fx;
+    const dy = this.goal.y - this.fy;
+    const dist = Math.hypot(dx, dy);
+    const px = edmundPixels(this.fy, this.save.room, figurePixels(this.fy));
+    const advance = (EDMUND.stepMeters / clip.perStep) * (px / EDMUND.figureMeters);
+    // Depth is shallow, so toward/away camera moves a little slower and the cycle stays readable.
+    const speed = Math.max(36, advance * clip.fps * (facing === 'side' ? 1 : 0.62));
+    if (dist <= speed * dt) {
+      const face = facing === 'side' && Math.abs(dx) > 2 ? (dx < 0 ? -1 : 1) : this.face;
+      this.place(this.goal.x, this.goal.y, face);
+      this.walking = false;
+      this.goal = null;
+      this.edmundFacing = 'side';
+      const done = this.walkResolve;
+      this.walkResolve = null;
+      done?.(true);
+      return;
+    }
+    this.stride += speed * dt;
+    while (this.stride >= advance) {
+      this.stride -= advance;
+      this.walkFrame = (this.walkFrame + 1) % clip.count;
+      if (this.walkFrame % clip.perStep === 0) audio.play('foot');
+    }
+    const face: 1 | -1 = facing === 'side' ? (dx < 0 ? -1 : 1) : this.face;
+    this.place(this.fx + (dx / dist) * speed * dt, this.fy + (dy / dist) * speed * dt, face);
+  }
+
+  private edmundAim(): EdmundFacing {
+    if (!this.goal) return 'side';
+    const dx = this.goal.x - this.fx;
+    const dy = this.goal.y - this.fy;
+    if (Math.abs(dy) > Math.abs(dx) * 1.1 && Math.abs(dy) > 10) return dy > 0 ? 'front' : 'back';
+    return 'side';
+  }
+
+  private drawOfficeLife(): void {
+    const g = this.officeFx;
+    if (!g) return;
+    g.clear();
+    if (this.save.room !== 'office') return;
+    const t = this.time.now / 1000;
+    g.lineStyle(1, 0xc5d6de, 0.45);
+    for (let i = 0; i < 16; i++) {
+      const x = 262 + ((i * 41 + t * 36) % 190);
+      const y = 178 + ((i * 57 + t * 80) % 200);
+      g.beginPath();
+      g.moveTo(x, y);
+      g.lineTo(x - 2, y + 12);
+      g.strokePath();
+    }
+    const glow = 0.07 + Math.sin(t * 2.1) * 0.018;
+    g.fillStyle(0xe6b15a, glow);
+    g.fillEllipse(1062, 368, 200, 80);
+    const puff = (t * 18) % 46;
+    g.fillStyle(0xf2efe6, 0.28 * (1 - puff / 46));
+    g.fillCircle(1100, 352 - puff, 3 + puff * 0.08);
+    g.fillStyle(0xf2efe6, 0.2 * (1 - ((puff + 20) % 46) / 46));
+    g.fillCircle(1106, 352 - ((puff + 20) % 46), 2.5);
+  }
+
+  private refreshTestLabels(): void {
+    const show = this.isEdmund() && this.save.room === 'office';
+    this.testLabelA?.setVisible(show).setColor(this.edmundSet === 'a' ? '#e6c98a' : '#8c7d6c');
+    this.testLabelB?.setVisible(show).setColor(this.edmundSet === 'b' ? '#e6c98a' : '#8c7d6c');
+  }
+
+  private switchEdmund(set: EdmundSet): void {
+    if (set === this.edmundSet) return;
+    this.edmundSet = set;
+    this.edmundSpan = 0;
+    writeEdmundSet(set);
+    paintHero(this, this.profile());
+    this.refreshTestLabels();
+  }
+
+  private async runDemo(): Promise<void> {
+    this.place(340, 545, 1);
+    await this.wait(300);
+    await this.walkTo(1020, 545);
+    await this.wait(1600);
+    this.place(640, 508, 1);
+    await this.walkTo(640, 602);
+    await this.walkTo(640, 508);
+    await this.walkTo(640, 602);
+    await this.walkTo(360, 560);
+    this.face = -1;
+    await this.playTake();
+    await this.wait(700);
   }
 
   private walkTo(x: number, y: number): Promise<boolean> {
@@ -1190,6 +1447,14 @@ export class AdventureScene extends Phaser.Scene {
       this.persist();
       return;
     }
+    if (this.isEdmund() && this.save.room === 'office' && this.hitRect(w.x, w.y, 460, 4, 100, 32)) {
+      this.switchEdmund('a');
+      return;
+    }
+    if (this.isEdmund() && this.save.room === 'office' && this.hitRect(w.x, w.y, 580, 4, 100, 32)) {
+      this.switchEdmund('b');
+      return;
+    }
     if (w.y < 48 && w.x < 96) {
       this.openMenu();
       return;
@@ -1375,6 +1640,14 @@ export class AdventureScene extends Phaser.Scene {
     this.selected = null;
     this.redrawHud();
     await this.guard(async () => {
+      if (spot.id === 'paperweight' && !look && !item && this.isEdmund()) {
+        const ok = await this.walkTo(spot.walkX, spot.walkY);
+        if (!ok) return;
+        this.face = -1;
+        await this.playTake();
+        await this.say('detective', spot.look);
+        return;
+      }
       if (spot.verb === 'edith' || spot.verb === 'june' || spot.verb === 'ambrose') await this.faceNpc(spot.verb);
       else {
         const ok = await this.walkTo(spot.walkX, spot.walkY);
@@ -1497,6 +1770,7 @@ export class AdventureScene extends Phaser.Scene {
     const g = this.fog;
     if (!g) return;
     g.clear();
+    if (this.save.room === 'office') return;
     const thick = this.save.room === 'stock' ? 0.7 : 0.45;
     for (const mote of this.motes) {
       mote.x += mote.vx * dt;

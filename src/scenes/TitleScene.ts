@@ -70,7 +70,7 @@ export class TitleScene extends Phaser.Scene {
       stroke: '#140e0a',
       strokeThickness: 8,
     }).setOrigin(0.5).setResolution(2);
-    this.add.text(W / 2, 214, 'v0.16', {
+    this.add.text(W / 2, 214, 'v0.17 stage 1', {
       fontFamily: FONT,
       fontStyle: 'italic',
       fontSize: '28px',
@@ -108,7 +108,8 @@ export class TitleScene extends Phaser.Scene {
       g.fillRoundedRect(x, 88, 236, 500, 12);
       g.lineStyle(2, 0xc6a15a, 1);
       g.strokeRoundedRect(x, 88, 236, 500, 12);
-      this.add.image(x + 118, 430, `bust-${row.id}`).setOrigin(0.5, 1).setScale(0.28);
+      const bust = this.add.image(x + 118, 430, `bust-${row.id}`).setOrigin(row.id === 'crowe' ? 210 / 420 : 0.5, row.id === 'crowe' ? 500 / 520 : 1);
+      bust.setScale(row.id === 'crowe' ? 0.58 : 0.28);
       this.add.text(x + 118, 448, row.label, {
         fontFamily: DISPLAY,
         fontSize: '18px',
@@ -138,7 +139,8 @@ export class TitleScene extends Phaser.Scene {
     }).setResolution(2);
     this.add.text(500, 78, 'Name', { fontFamily: DISPLAY, fontSize: '20px', color: '#f3e6c8' }).setResolution(2);
     paintHero(this, { name: who.defaultName, detective: this.detective, coat: this.coat, hat: this.hat, scarf: this.scarf, tone: this.tone });
-    this.add.image(250, 640, 'hero').setOrigin(0.5, 1).setScale(0.4);
+    const preview = this.add.image(250, 640, 'hero').setOrigin(this.detective === 'crowe' ? 210 / 420 : 0.5, this.detective === 'crowe' ? 500 / 520 : 1);
+    preview.setScale(this.detective === 'crowe' ? 0.72 : 0.4);
     this.row(500, 200, who.coat, who.coats, this.coat, 'coat');
     this.row(500, 290, who.hat, who.hats, this.hat, 'hat');
     this.row(500, 380, who.scarf, who.scarves, this.scarf, 'scarf');

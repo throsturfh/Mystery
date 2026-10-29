@@ -5,7 +5,7 @@ export const FIGURE = {
   backPx: 248,
   /** How many painted stride frames each detective uses. */
   strides: {
-    crowe: 6,
+    crowe: 12,
     sara: 6,
     barty: 10,
     pip: 10,
