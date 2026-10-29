@@ -58,6 +58,8 @@ export interface Ctx {
   sfx(name: string, pan?: number): void;
   face(who: 'edith' | 'june' | 'ambrose'): Promise<void>;
   handoff(): Promise<void>;
+  /** Edmund plays the reach. Other detectives keep the short pick pose. The item is added when it lands. */
+  reach(item: ItemId, from: { x: number; y: number }): Promise<void>;
   openMap(): Promise<void>;
   card(): Promise<void>;
   settleBook(): Promise<void>;
@@ -134,6 +136,13 @@ export const PROP_AT = {
   ledger: { x: 924, y: 400 },
   pencil: { x: 900, y: 346 },
   shelfBook: { x: 470, y: 188 },
+};
+
+const TAKE_FROM: Partial<Record<ItemId, { x: number; y: number }>> = {
+  pencil: { x: 972, y: 368 },
+  matches: { x: 186, y: 444 },
+  book: { x: 430, y: 336 },
+  ledger: { x: 1048, y: 450 },
 };
 
 const spot = (
@@ -359,8 +368,8 @@ async function pick(ctx: Ctx, item: ItemId, line: string, gone: string): Promise
     await ctx.say('detective', gone);
     return;
   }
-  ctx.add(item);
-  ctx.pose('pick');
+  const from = TAKE_FROM[item] ?? { x: ctx.room() === 'shop' ? 900 : 480, y: 420 };
+  await ctx.reach(item, from);
   ctx.sfx('pickup');
   ctx.refresh();
   await ctx.say('detective', line);
@@ -440,8 +449,7 @@ async function intro(ctx: Ctx): Promise<void> {
   ];
   await ctx.say('edith', replies[choice] ?? replies[0]!);
   await ctx.say('edith', 'Take the lantern. It has a dramatic streak. The wick does not.');
-  ctx.pose('receive');
-  ctx.add('lantern');
+  await ctx.reach('lantern', { x: 1088, y: 250 });
   ctx.setFlag('introDone', true);
   ctx.refresh();
   await ctx.say('edith', byTone(tone, {

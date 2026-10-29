@@ -22,7 +22,8 @@ import {
   type Verb,
 } from '../story';
 import { detectiveById } from '../detectives';
-import { EDMUND_SIZE, playEdmundWalk, stopEdmundWalk, edmundSpeed } from '../edmundWalk';
+import { EDMUND_ORIGIN_X, EDMUND_ORIGIN_Y, EDMUND_SIZE, edmundScale, playEdmundWalk, stopEdmundWalk, edmundSpeed } from '../edmundWalk';
+import { EDMUND_REACH_KEY, reachAnchor, reachFingersKey, reachHand } from '../edmundReach';
 import { figurePixels, opaqueHeight, strideCount } from '../figure';
 import { idleKey, paintHero, walkKey } from '../tint';
 import { aside } from '../voices';
@@ -47,6 +48,13 @@ export class AdventureScene extends Phaser.Scene {
   private walkResolve: ((ok: boolean) => void) | null = null;
   private pose: 'none' | 'look' | 'pick' | 'give' | 'receive' | 'write' | 'shelf' | 'talk' = 'none';
   private poseUntil = 0;
+  private reaching = false;
+  private reachHeld?: Phaser.GameObjects.Image;
+  private reachFingers?: Phaser.GameObjects.Image;
+  private reachFrom = { x: 0, y: 0 };
+  private reachItemId: ItemId | null = null;
+  private reachGripped = false;
+  private reachOnHold: (() => void) | null = null;
   private poseFrom = 0;
   private hero!: Phaser.GameObjects.Sprite;
   private shadow!: Phaser.GameObjects.Ellipse;
@@ -318,6 +326,7 @@ export class AdventureScene extends Phaser.Scene {
       },
       face: (who) => this.faceNpc(who),
       handoff: () => this.handoffKey(),
+      reach: (item, from) => this.playReach(item, from),
       openMap: async () => {
         if (this.departing) return;
         this.departing = true;
@@ -781,8 +790,11 @@ export class AdventureScene extends Phaser.Scene {
     const posing = this.time.now < this.poseUntil;
     if (!posing) this.pose = 'none';
     const look = this.profile();
-    const croweWalk = this.save.detective === 'crowe' && this.walking && !posing;
-    if (croweWalk) {
+    const croweWalk = this.save.detective === 'crowe' && this.walking && !posing && !this.reaching;
+    if (this.reaching && this.save.detective === 'crowe') {
+      this.hero.setOrigin(EDMUND_ORIGIN_X, EDMUND_ORIGIN_Y);
+      this.hero.setScale(edmundScale(this.fy));
+    } else if (croweWalk) {
       // One scale for the whole cycle. Fitting each frame to its own opaque height pulsed him.
       playEdmundWalk(this.hero, this.fy);
     } else {
@@ -800,7 +812,8 @@ export class AdventureScene extends Phaser.Scene {
     const gesture = this.gesture(this.time.now);
     this.hero.setPosition(this.fx, this.fy + breath + gesture.y);
     this.hero.setFlipX(this.face < 0);
-    this.hero.setAngle(gesture.angle);
+    this.hero.setAngle(this.reaching ? 0 : gesture.angle);
+    if (this.reaching) this.syncReach();
     this.hero.setAlpha(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 0.55 : 1);
     this.hero.setDepth(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 900 : 500 + this.fy);
     this.shadow.setPosition(this.fx, this.fy + 2);
@@ -1316,7 +1329,130 @@ export class AdventureScene extends Phaser.Scene {
     return this.add.text(x + w / 2, y + 28, label, { fontFamily: DISPLAY, fontSize: '22px', color: '#f6edd6' }).setOrigin(0.5).setDepth(2602).setResolution(2);
   }
 
+  private playReach(item: ItemId, from: { x: number; y: number }, onHold?: () => void): Promise<void> {
+    if (this.save.detective !== 'crowe') {
+      if (!this.save.items.includes(item)) this.save.items.push(item);
+      this.pose = 'pick';
+      this.poseFrom = this.time.now;
+      this.poseUntil = this.time.now + 640;
+      this.refresh();
+      return Promise.resolve();
+    }
+    this.walking = false;
+    this.goal = null;
+    this.pose = 'none';
+    this.face = from.x < this.fx ? -1 : 1;
+    const prop = { pencil: 'prop-pencil', matches: 'prop-matches', book: 'prop-book', ledger: 'prop-ledger' }[item as string];
+    if (prop) {
+      for (const piece of this.scenery) {
+        if (piece.img.active && piece.img.texture.key === prop) piece.img.setVisible(false);
+      }
+    }
+    this.reachHeld?.destroy();
+    this.reachFingers?.destroy();
+    const icon = item === 'book' ? 'icon-greenbook' : `icon-${item}`;
+    this.reachFrom = from;
+    this.reachItemId = item;
+    this.reachGripped = false;
+    this.reachOnHold = onHold ?? null;
+    this.reachHeld = this.add.image(from.x, from.y, icon).setOrigin(0.5, 0.5).setDisplaySize(24, 24).setDepth(this.fy + 2);
+    this.reachFingers = this.add.image(this.fx, this.fy, reachFingersKey(10)).setOrigin(EDMUND_ORIGIN_X, EDMUND_ORIGIN_Y).setVisible(false);
+    this.reaching = true;
+    if (this.hero.anims.isPlaying) this.hero.anims.stop();
+    this.hero.play({ key: EDMUND_REACH_KEY, repeat: 0 });
+    return new Promise((resolve) => {
+      const done = (anim: Phaser.Animations.Animation) => {
+        if (anim.key !== EDMUND_REACH_KEY) return;
+        this.hero.off(Phaser.Animations.Events.ANIMATION_COMPLETE, done);
+        this.pocketReach(resolve);
+      };
+      this.hero.on(Phaser.Animations.Events.ANIMATION_COMPLETE, done);
+    });
+  }
+
+  private syncReach(): void {
+    const held = this.reachHeld;
+    const fingers = this.reachFingers;
+    if (!held?.active || !fingers?.active) return;
+    const frame = Math.max(0, (this.hero.anims.currentFrame?.index ?? 1) - 1);
+    const anchor = reachAnchor(frame);
+    const flip = this.face < 0;
+    const scale = edmundScale(this.fy);
+    const hand = reachHand(this.hero.x, this.hero.y, this.fy, flip, frame);
+    fingers.setPosition(this.hero.x, this.hero.y).setScale(scale).setFlipX(flip).setDepth(this.hero.depth + 2);
+    if (anchor.phase === 'holding') {
+      if (!this.reachGripped) {
+        this.reachGripped = true;
+        this.reachOnHold?.();
+        this.reachOnHold = null;
+      }
+      held.setPosition(hand.x, hand.y).setDisplaySize(22, 22).setDepth(this.hero.depth + 1);
+      fingers.setTexture(reachFingersKey(frame)).setVisible(true);
+    } else {
+      const t = Math.min(1, frame / 9);
+      held.setPosition(this.reachFrom.x + (hand.x - this.reachFrom.x) * t, this.reachFrom.y + (hand.y - this.reachFrom.y) * t).setDepth(this.hero.depth + 1);
+      fingers.setVisible(false);
+    }
+  }
+
+  private pocketReach(resolve: () => void): void {
+    this.reaching = false;
+    this.reachFingers?.destroy();
+    this.reachFingers = undefined;
+    const held = this.reachHeld;
+    const item = this.reachItemId;
+    this.reachHeld = undefined;
+    this.reachItemId = null;
+    if (!held?.active || !item) {
+      resolve();
+      return;
+    }
+    const slot = this.slotCenter(this.save.items.length);
+    this.tweens.add({
+      targets: held,
+      x: slot.x,
+      y: slot.y,
+      displayWidth: 28,
+      displayHeight: 28,
+      duration: 420,
+      ease: 'Cubic.easeIn',
+      onComplete: () => {
+        held.destroy();
+        if (!this.save.items.includes(item)) this.save.items.push(item);
+        if (item === 'key') this.save.flags.gotKey = true;
+        this.refresh();
+        resolve();
+      },
+    });
+  }
+
   private handoffKey(): Promise<void> {
+    if (this.save.detective !== 'crowe') return this.handoffKeyPlain();
+    this.clearSpeech();
+    const june = this.june;
+    const toward = this.fx < (june?.x ?? 620) ? 1 : -1;
+    const chest = june?.active ? june.y - june.displayHeight * 0.46 : 360;
+    const from = june?.active ? { x: june.x + toward * 8, y: chest } : { x: 640, y: 380 };
+    if (june?.active) {
+      this.tweens.add({
+        targets: june,
+        angle: toward * -6,
+        x: june.x + toward * 18,
+        duration: 833,
+        ease: 'Sine.easeInOut',
+        yoyo: true,
+      });
+    }
+    return this.playReach('key', from, () => {
+      if (!june?.active) return;
+      june.setTexture('june-nokeys');
+      this.fit(june, june.y, 0.92);
+    }).then(() => {
+      audio.play('pickup');
+    });
+  }
+
+  private handoffKeyPlain(): Promise<void> {
     return new Promise((resolve) => {
       this.clearSpeech();
       const june = this.june;
