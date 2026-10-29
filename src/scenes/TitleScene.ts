@@ -70,7 +70,7 @@ export class TitleScene extends Phaser.Scene {
       stroke: '#140e0a',
       strokeThickness: 8,
     }).setOrigin(0.5).setResolution(2);
-    this.add.text(W / 2, 214, 'v0.17', {
+    this.add.text(W / 2, 214, 'v0.18', {
       fontFamily: FONT,
       fontStyle: 'italic',
       fontSize: '28px',

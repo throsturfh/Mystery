@@ -22,7 +22,7 @@ import {
   type Verb,
 } from '../story';
 import { detectiveById } from '../detectives';
-import { playEdmundWalk, stopEdmundWalk, edmundSpeed } from '../edmundWalk';
+import { EDMUND_SIZE, playEdmundWalk, stopEdmundWalk, edmundSpeed } from '../edmundWalk';
 import { figurePixels, opaqueHeight, strideCount } from '../figure';
 import { idleKey, paintHero, walkKey } from '../tint';
 import { aside } from '../voices';
@@ -794,7 +794,7 @@ export class AdventureScene extends Phaser.Scene {
         const key = idleKey(look);
         if (this.hero.texture.key !== key) this.hero.setTexture(key);
       }
-      this.fit(this.hero, this.fy);
+      this.fit(this.hero, this.fy, this.save.detective === 'crowe' ? EDMUND_SIZE : 1);
     }
     const breath = this.walking ? 0 : Math.sin(this.time.now / 980) * 1.1;
     const gesture = this.gesture(this.time.now);
@@ -804,7 +804,7 @@ export class AdventureScene extends Phaser.Scene {
     this.hero.setAlpha(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 0.55 : 1);
     this.hero.setDepth(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 900 : 500 + this.fy);
     this.shadow.setPosition(this.fx, this.fy + 2);
-    const shadow = figurePixels(this.fy) / 320;
+    const shadow = (figurePixels(this.fy) / 320) * (this.save.detective === 'crowe' ? EDMUND_SIZE : 1);
     this.shadow.setScale(shadow, shadow * 0.85);
     this.shadow.setAlpha(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 0.15 : 0.35);
   }
@@ -1338,7 +1338,8 @@ export class AdventureScene extends Phaser.Scene {
         });
       }
       const key = this.add.image(from.x, from.y, 'icon-key').setDepth(1400).setDisplaySize(36, 36);
-      const hand = { x: this.fx + this.face * 28, y: this.fy - figurePixels(this.fy) * 0.48 };
+      const reach = figurePixels(this.fy) * (this.save.detective === 'crowe' ? EDMUND_SIZE : 1);
+      const hand = { x: this.fx + this.face * 28, y: this.fy - reach * 0.48 };
       this.tweens.add({
         targets: key,
         x: offer.x,
