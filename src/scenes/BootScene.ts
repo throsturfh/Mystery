@@ -2,7 +2,18 @@ import Phaser from 'phaser';
 import { AUDIO_FILES, audio } from '../audio';
 import { EDMUND_REACH_FPS, EDMUND_REACH_FRAMES, EDMUND_REACH_KEY, reachFingersKey, reachFrameKey } from '../edmundReach';
 import { EDMUND_WALK_FPS, EDMUND_WALK_FRAMES, EDMUND_WALK_KEY, edmundFrameKey } from '../edmundWalk';
-import { LOTTA_IDLE_FRAMES, LOTTA_TROT_FRAMES, installLottaRig, lottaBodyKey, lottaFrameKey, lottaHeadKey } from '../lotta';
+import {
+  GLANCE_POSES,
+  LOTTA_IDLE_FRAMES,
+  LOTTA_SETTLE_FRAMES,
+  LOTTA_STAND_GLANCE_FRAMES,
+  LOTTA_TROT_FRAMES,
+  lottaIdleKey,
+  lottaSettleKey,
+  lottaStandKey,
+  lottaTrotKey,
+  lottaTrotVariants,
+} from '../lotta';
 import { SARA_REACH_FPS, SARA_REACH_FRAMES, SARA_REACH_KEY, saraReachFingersKey, saraReachFrameKey } from '../saraReach';
 import { SARA_WALK_FPS, SARA_WALK_FRAMES, SARA_WALK_KEY, saraFrameKey } from '../saraWalk';
 import { paintSaraFrames } from '../tint';
@@ -43,19 +54,26 @@ export class BootScene extends Phaser.Scene {
     }
     for (let i = 0; i < LOTTA_IDLE_FRAMES; i++) {
       const name = i.toString().padStart(2, '0');
-      this.load.image(lottaFrameKey('idle', i), asset(`lotta/idle-${name}.webp`));
-      this.load.image(lottaBodyKey('idle', i), asset(`lotta/layers/idle-${name}-body-nohead.webp`));
+      this.load.image(lottaIdleKey(i), asset(`lotta/frames/idle/${name}.webp`));
     }
-    for (let i = 0; i < LOTTA_TROT_FRAMES; i++) {
-      const name = i.toString().padStart(2, '0');
-      this.load.image(lottaFrameKey('trot', i), asset(`lotta/trot-${name}.webp`));
-      this.load.image(lottaBodyKey('trot', i), asset(`lotta/layers/trot-${name}-body-nohead.webp`));
+    for (const variant of lottaTrotVariants()) {
+      for (let i = 0; i < LOTTA_TROT_FRAMES; i++) {
+        const name = i.toString().padStart(2, '0');
+        this.load.image(lottaTrotKey(variant, i), asset(`lotta/frames/trot/${variant}/${name}.webp`));
+      }
     }
-    for (const pose of ['forward', 'back', 'up', 'side'] as const) {
-      this.load.image(lottaHeadKey(pose), asset(`lotta/layers/head-${pose}.webp`));
+    for (const pose of GLANCE_POSES) {
+      for (let i = 0; i < LOTTA_STAND_GLANCE_FRAMES; i++) {
+        const name = i.toString().padStart(2, '0');
+        this.load.image(lottaStandKey(pose, i), asset(`lotta/frames/glance-stand/${pose}/${name}.webp`));
+      }
     }
-    this.load.json('lotta-head-anchors', asset('lotta/head-anchors.json'));
-    this.load.json('lotta-glance-timing', asset('lotta/glance-timing.json'));
+    for (let from = 0; from < LOTTA_TROT_FRAMES; from++) {
+      for (let i = 0; i < LOTTA_SETTLE_FRAMES; i++) {
+        const name = from.toString().padStart(2, '0');
+        this.load.image(lottaSettleKey(from, i), asset(`lotta/frames/settle/from${name}_${i}.webp`));
+      }
+    }
     this.loadSaraPainted(coats, hats, scarves);
     for (let i = 0; i < EDMUND_WALK_FRAMES; i++) {
       const name = i.toString().padStart(2, '0');
@@ -94,7 +112,6 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    installLottaRig(this.cache.json.get('lotta-head-anchors'), this.cache.json.get('lotta-glance-timing'));
     this.paintBust();
     this.paintShelfBook();
     this.anims.create({

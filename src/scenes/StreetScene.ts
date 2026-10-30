@@ -5,8 +5,8 @@ import { ENTRY } from '../story';
 import { loadSave, writeSave, type RoomId } from '../save';
 import { EDMUND_SIZE, playEdmundWalk, stopEdmundWalk, edmundSpeed } from '../edmundWalk';
 import { figurePixels, opaqueHeight, strideCount } from '../figure';
-import { LOTTA_FPS, LOTTA_IDLE_FRAMES, LOTTA_ORIGIN_X, LOTTA_ORIGIN_Y, LOTTA_TROT_STEP, lottaFrameKey } from '../lotta';
-import { SARA_SIZE, SARA_WALK_KEY, playSaraWalk, saraScale, saraSpeed, stopSaraWalk } from '../saraWalk';
+import { LOTTA_FPS, LOTTA_IDLE_FRAMES, LOTTA_ORIGIN_X, LOTTA_ORIGIN_Y, LOTTA_TROT_FRAMES, lottaIdleKey, lottaScale, lottaStride, lottaTrotKey } from '../lotta';
+import { SARA_SIZE, SARA_WALK_KEY, playSaraWalk, saraSpeed, stopSaraWalk } from '../saraWalk';
 import { idleKey, paintHero, walkKey } from '../tint';
 
 const FONT = 'Cormorant Garamond, Georgia, serif';
@@ -64,8 +64,8 @@ export class StreetScene extends Phaser.Scene {
       const painted = (who === 'crowe' && anim.key === 'edmund-walk') || (who === 'sara' && anim.key === SARA_WALK_KEY);
       if (painted && (frame.index === 1 || frame.index === 7)) audio.play('foot');
     });
-    if (save.detective === 'sara' && this.textures.exists(lottaFrameKey('trot', 0))) {
-      this.add.image(this.x - 170, 648, lottaFrameKey('idle', 0)).setOrigin(LOTTA_ORIGIN_X, LOTTA_ORIGIN_Y).setName('lotta');
+    if (save.detective === 'sara' && this.textures.exists(lottaTrotKey('fwd', 0))) {
+      this.add.image(this.x - 170, 648, lottaIdleKey(0)).setOrigin(LOTTA_ORIGIN_X, LOTTA_ORIGIN_Y).setName('lotta');
     }
     this.events.once('shutdown', () => {
       this.leaving = true;
@@ -117,10 +117,10 @@ export class StreetScene extends Phaser.Scene {
       const dog = this.children.getByName('lotta') as Phaser.GameObjects.Image | null;
       if (dog?.active) {
         this.dogClock += dt;
-        const idle = lottaFrameKey('idle', Math.floor(this.dogClock * LOTTA_FPS) % LOTTA_IDLE_FRAMES);
+        const idle = lottaIdleKey(Math.floor(this.dogClock * LOTTA_FPS) % LOTTA_IDLE_FRAMES);
         if (this.textures.exists(idle) && dog.texture.key !== idle) dog.setTexture(idle);
         dog.setFlipX(false);
-        dog.setPosition(this.x - 170, 600).setOrigin(LOTTA_ORIGIN_X, LOTTA_ORIGIN_Y).setScale(saraScale(600));
+        dog.setPosition(this.x - 170, 600).setOrigin(LOTTA_ORIGIN_X, LOTTA_ORIGIN_Y).setScale(lottaScale(600));
       }
       this.arrive();
       return;
@@ -133,11 +133,11 @@ export class StreetScene extends Phaser.Scene {
     else this.fitStreet(this.hero, y);
     const dog = this.children.getByName('lotta') as Phaser.GameObjects.Image | null;
     if (dog?.active) {
-      this.dogTravel += moved / Math.max(0.0001, saraScale(y));
-      const frame = Math.floor(this.dogTravel / LOTTA_TROT_STEP) % 8;
-      const key = lottaFrameKey('trot', frame);
+      this.dogTravel += moved / Math.max(0.0001, lottaScale(y));
+      const frame = Math.floor(this.dogTravel / lottaStride()) % LOTTA_TROT_FRAMES;
+      const key = lottaTrotKey('fwd', frame);
       if (this.textures.exists(key) && dog.texture.key !== key) dog.setTexture(key);
-      dog.setPosition(this.x - 170, y).setOrigin(LOTTA_ORIGIN_X, LOTTA_ORIGIN_Y).setScale(saraScale(y));
+      dog.setPosition(this.x - 170, y).setOrigin(LOTTA_ORIGIN_X, LOTTA_ORIGIN_Y).setScale(lottaScale(y));
     }
   }
 
