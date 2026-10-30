@@ -1,0 +1,129 @@
+{
+ "canvas": [
+  760,
+  1240
+ ],
+ "baseline_y": 1215,
+ "fps": 12,
+ "frames": [
+  {
+   "frame": 0,
+   "file": "reach-00.png",
+   "hand_x": 390.5,
+   "hand_y": 687.2,
+   "phase": "empty"
+  },
+  {
+   "frame": 1,
+   "file": "reach-01.png",
+   "hand_x": 395.9,
+   "hand_y": 704.0,
+   "phase": "empty"
+  },
+  {
+   "frame": 2,
+   "file": "reach-02.png",
+   "hand_x": 396.8,
+   "hand_y": 598.5,
+   "phase": "empty"
+  },
+  {
+   "frame": 3,
+   "file": "reach-03.png",
+   "hand_x": 425.4,
+   "hand_y": 576.5,
+   "phase": "empty"
+  },
+  {
+   "frame": 4,
+   "file": "reach-04.png",
+   "hand_x": 497.9,
+   "hand_y": 616.8,
+   "phase": "empty"
+  },
+  {
+   "frame": 5,
+   "file": "reach-05.png",
+   "hand_x": 555.8,
+   "hand_y": 579.7,
+   "phase": "empty"
+  },
+  {
+   "frame": 6,
+   "file": "reach-06.png",
+   "hand_x": 624.8,
+   "hand_y": 560.9,
+   "phase": "empty"
+  },
+  {
+   "frame": 7,
+   "file": "reach-07.png",
+   "hand_x": 662.3,
+   "hand_y": 491.6,
+   "phase": "empty"
+  },
+  {
+   "frame": 8,
+   "file": "reach-08.png",
+   "hand_x": 662.8,
+   "hand_y": 492.0,
+   "phase": "empty"
+  },
+  {
+   "frame": 9,
+   "file": "reach-09.png",
+   "hand_x": 646.7,
+   "hand_y": 474.5,
+   "phase": "empty"
+  },
+  {
+   "frame": 10,
+   "file": "reach-10.png",
+   "hand_x": 644.9,
+   "hand_y": 506.0,
+   "phase": "holding",
+   "fingers_overlay": "reach-10-fingers.png"
+  },
+  {
+   "frame": 11,
+   "file": "reach-11.png",
+   "hand_x": 602.8,
+   "hand_y": 554.9,
+   "phase": "holding",
+   "fingers_overlay": "reach-11-fingers.png"
+  },
+  {
+   "frame": 12,
+   "file": "reach-12.png",
+   "hand_x": 517.0,
+   "hand_y": 573.4,
+   "phase": "holding",
+   "fingers_overlay": "reach-12-fingers.png"
+  },
+  {
+   "frame": 13,
+   "file": "reach-13.png",
+   "hand_x": 442.6,
+   "hand_y": 605.1,
+   "phase": "holding",
+   "fingers_overlay": "reach-13-fingers.png"
+  },
+  {
+   "frame": 14,
+   "file": "reach-14.png",
+   "hand_x": 407.4,
+   "hand_y": 593.2,
+   "phase": "holding",
+   "fingers_overlay": "reach-14-fingers.png"
+  },
+  {
+   "frame": 15,
+   "file": "reach-15.png",
+   "hand_x": 406.4,
+   "hand_y": 593.3,
+   "phase": "holding",
+   "fingers_overlay": "reach-15-fingers.png"
+  }
+ ],
+ "notes": "hand_x/hand_y = canvas pixel where an item sprite should be centred (palm when empty, inside the fist when holding). Attach item only on frames with phase=holding; frames 7-9 are the open palm/closing grip ready to receive; holding frames have reach-XX-fingers.png overlay (draw frame, item, then fingers). Draw order on holding frames: reach-XX.png, item centred at hand_x/hand_y, then reach-XX-fingers.png on top (same full-canvas size). Before pickup the key in the preview sits at the frame-09 grip point."
+}
