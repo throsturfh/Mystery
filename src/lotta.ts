@@ -107,6 +107,11 @@ export function nextGlanceHold(): number {
   return rig.holdMin + Math.random() * Math.max(0, rig.holdMax - rig.holdMin);
 }
 
+/** Seconds a glance takes to ease in, out, or back to forward when she starts to trot. */
+export function glanceEaseSeconds(): number {
+  return rig.ease;
+}
+
 export function lottaFrameKey(anim: 'idle' | 'trot', index: number): string {
   return `lotta-${anim}-${index.toString().padStart(2, '0')}`;
 }
