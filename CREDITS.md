@@ -28,4 +28,4 @@ Cinzel and Cormorant Garamond, loaded through Fontsource. Both are under the SIL
 
 ## Pictures
 
-The rooms, June, Ambrose, Edith, the dog, and the detectives are original art made for this game. Sara Lind and Skuggi are placeholder names in `src/detectives.ts`. Sara is drawn from a description only, not from a real person.
+The rooms, June, Ambrose, Edith, the dog, and the detectives are original art made for this game. Sara Kristín and her dog Lotta are named in `src/detectives.ts`. Sara is drawn from a description only, not from a real person.

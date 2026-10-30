@@ -53,6 +53,20 @@ export function paintHero(scene: Phaser.Scene, profile: Profile): void {
   compose(scene, 'hero', 'detective', profile);
   const frames = strideCount(profile.detective || 'crowe');
   for (let i = 0; i < frames; i++) compose(scene, `hero-${i}`, `walk-${i}`, profile);
+  paintSaraFrames(scene, profile);
+}
+
+/** Sara's painted walk and reach, stacked in the same order as the standing portrait. */
+export function paintSaraFrames(scene: Phaser.Scene, profile: Profile): void {
+  if ((profile.detective || 'crowe') !== 'sara') return;
+  for (let i = 0; i < 12; i++) {
+    const name = i.toString().padStart(2, '0');
+    compose(scene, `sara-walk-${name}`, `walk-${name}`, profile);
+  }
+  for (let i = 0; i < 16; i++) {
+    const name = i.toString().padStart(2, '0');
+    compose(scene, `sara-reach-${name}`, `reach-${name}`, profile);
+  }
 }
 
 export function idleKey(_profile: Profile): string {

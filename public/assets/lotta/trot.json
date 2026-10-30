@@ -1,0 +1,164 @@
+{
+ "canvas": [
+  860,
+  520
+ ],
+ "baseline_y": 495,
+ "fps": 12,
+ "trot": {
+  "frames": 12,
+  "loop": true,
+  "variants": [
+   "fwd",
+   "up_half",
+   "up_full",
+   "side_half",
+   "side_full",
+   "back_full"
+  ],
+  "path": "frames/trot/<variant>/NN.webp",
+  "stride_px_per_frame": 17.92,
+  "stride_px_per_cycle": 215.04,
+  "note": "All 6 variants share the identical leg cycle; swap variant per frame while keeping the frame index running to glance mid-trot."
+ },
+ "trot_glances": {
+  "up": {
+   "variant_sequence": [
+    "fwd",
+    "up_half",
+    "up_half",
+    "up_full",
+    "up_full",
+    "up_full",
+    "up_full",
+    "up_full",
+    "up_full",
+    "up_full",
+    "up_full",
+    "up_half",
+    "up_half",
+    "fwd"
+   ]
+  },
+  "side": {
+   "variant_sequence": [
+    "fwd",
+    "side_half",
+    "side_half",
+    "side_full",
+    "side_full",
+    "side_full",
+    "side_full",
+    "side_full",
+    "side_full",
+    "side_full",
+    "side_full",
+    "side_half",
+    "side_half",
+    "fwd"
+   ]
+  },
+  "back": {
+   "variant_sequence": [
+    "fwd",
+    "side_half",
+    "side_full",
+    "back_full",
+    "back_full",
+    "back_full",
+    "back_full",
+    "back_full",
+    "back_full",
+    "back_full",
+    "back_full",
+    "side_full",
+    "side_half",
+    "fwd"
+   ]
+  }
+ },
+ "settle": {
+  "frames": 6,
+  "path": "frames/settle/fromKK_J.webp",
+  "from_any_trot_frame": true,
+  "dx_px_per_frame": [
+   13.44,
+   8.96,
+   5.38,
+   2.69,
+   0.9,
+   0.0
+  ],
+  "note": "When stopping after showing trot frame KK, play fromKK_0..5 while moving the sprite by dx_px_per_frame, then start idle at frame 00."
+ },
+ "idle": {
+  "frames": 24,
+  "loop": true,
+  "path": "frames/idle/NN.webp"
+ },
+ "stand_glances": {
+  "up": {
+   "frames": 14,
+   "variants": [
+    "fwd",
+    "up_half",
+    "up_half",
+    "up_full",
+    "up_full",
+    "up_full",
+    "up_full",
+    "up_full",
+    "up_full",
+    "up_full",
+    "up_full",
+    "up_half",
+    "up_half",
+    "fwd"
+   ],
+   "path": "frames/glance-stand/up/NN.webp",
+   "note": "frame k uses idle breathing phase k%24; starts and ends on forward head"
+  },
+  "side": {
+   "frames": 14,
+   "variants": [
+    "fwd",
+    "side_half",
+    "side_half",
+    "side_full",
+    "side_full",
+    "side_full",
+    "side_full",
+    "side_full",
+    "side_full",
+    "side_full",
+    "side_full",
+    "side_half",
+    "side_half",
+    "fwd"
+   ],
+   "path": "frames/glance-stand/side/NN.webp",
+   "note": "frame k uses idle breathing phase k%24; starts and ends on forward head"
+  },
+  "back": {
+   "frames": 14,
+   "variants": [
+    "fwd",
+    "side_half",
+    "side_full",
+    "back_full",
+    "back_full",
+    "back_full",
+    "back_full",
+    "back_full",
+    "back_full",
+    "back_full",
+    "back_full",
+    "side_full",
+    "side_half",
+    "fwd"
+   ],
+   "path": "frames/glance-stand/back/NN.webp",
+   "note": "frame k uses idle breathing phase k%24; starts and ends on forward head"
+  }
+ }
+}

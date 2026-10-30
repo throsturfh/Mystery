@@ -174,7 +174,7 @@ export class TitleScene extends Phaser.Scene {
 
   private drawCredits(): void {
     this.add.text(W / 2, 140, 'Credits', { fontFamily: DISPLAY, fontSize: '48px', color: '#e6c98a' }).setOrigin(0.5).setResolution(2);
-    this.add.text(W / 2, 300, 'Rain by Ylmir, CC0. "Comfortable Mystery" by Kevin MacLeod, CC BY 4.0.\nFootsteps by swuing, via congusbongus, CC BY 3.0.\nEffects by rubberduck, CC0. Dog bark by Brandon Morris, CC0.\n\nCinzel and Cormorant Garamond, via Fontsource.\nRooms, ghosts, and the detectives are original art.\nNames Sara Lind and Skuggi are placeholders in one config file.', {
+    this.add.text(W / 2, 300, 'Rain by Ylmir, CC0. "Comfortable Mystery" by Kevin MacLeod, CC BY 4.0.\nFootsteps by swuing, via congusbongus, CC BY 3.0.\nEffects by rubberduck, CC0. Dog bark by Brandon Morris, CC0.\n\nCinzel and Cormorant Garamond, via Fontsource.\nRooms, ghosts, and the detectives are original art.\nSara Kristín and her dog Lotta are named in the case.', {
       fontFamily: FONT,
       fontSize: '28px',
       color: '#f6edd6',
