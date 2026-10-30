@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { AUDIO_FILES, audio } from '../audio';
 import { EDMUND_REACH_FPS, EDMUND_REACH_FRAMES, EDMUND_REACH_KEY, reachFingersKey, reachFrameKey } from '../edmundReach';
 import { EDMUND_WALK_FPS, EDMUND_WALK_FRAMES, EDMUND_WALK_KEY, edmundFrameKey } from '../edmundWalk';
-import { LOTTA_IDLE_FRAMES, LOTTA_TROT_FRAMES, lottaBodyKey, lottaFrameKey, lottaHeadKey } from '../lotta';
+import { LOTTA_IDLE_FRAMES, LOTTA_TROT_FRAMES, installLottaRig, lottaBodyKey, lottaFrameKey, lottaHeadKey } from '../lotta';
 import { SARA_REACH_FPS, SARA_REACH_FRAMES, SARA_REACH_KEY, saraReachFingersKey, saraReachFrameKey } from '../saraReach';
 import { SARA_WALK_FPS, SARA_WALK_FRAMES, SARA_WALK_KEY, saraFrameKey } from '../saraWalk';
 import { paintSaraFrames } from '../tint';
@@ -54,6 +54,8 @@ export class BootScene extends Phaser.Scene {
     for (const pose of ['forward', 'back', 'up', 'side'] as const) {
       this.load.image(lottaHeadKey(pose), asset(`lotta/layers/head-${pose}.webp`));
     }
+    this.load.json('lotta-head-anchors', asset('lotta/head-anchors.json'));
+    this.load.json('lotta-glance-timing', asset('lotta/glance-timing.json'));
     this.loadSaraPainted(coats, hats, scarves);
     for (let i = 0; i < EDMUND_WALK_FRAMES; i++) {
       const name = i.toString().padStart(2, '0');
@@ -92,6 +94,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
+    installLottaRig(this.cache.json.get('lotta-head-anchors'), this.cache.json.get('lotta-glance-timing'));
     this.paintBust();
     this.paintShelfBook();
     this.anims.create({

@@ -5,7 +5,7 @@ import { ENTRY } from '../story';
 import { loadSave, writeSave, type RoomId } from '../save';
 import { EDMUND_SIZE, playEdmundWalk, stopEdmundWalk, edmundSpeed } from '../edmundWalk';
 import { figurePixels, opaqueHeight, strideCount } from '../figure';
-import { LOTTA_ORIGIN_X, LOTTA_ORIGIN_Y, LOTTA_TROT_STEP, lottaFrameKey } from '../lotta';
+import { LOTTA_FPS, LOTTA_IDLE_FRAMES, LOTTA_ORIGIN_X, LOTTA_ORIGIN_Y, LOTTA_TROT_STEP, lottaFrameKey } from '../lotta';
 import { SARA_SIZE, SARA_WALK_KEY, playSaraWalk, saraScale, saraSpeed, stopSaraWalk } from '../saraWalk';
 import { idleKey, paintHero, walkKey } from '../tint';
 
@@ -21,6 +21,7 @@ export class StreetScene extends Phaser.Scene {
   private frame = 0;
   private stride = 0;
   private dogTravel = 0;
+  private dogClock = 0;
   private goal = 760;
   private done = false;
   private leaving = false;
@@ -36,6 +37,7 @@ export class StreetScene extends Phaser.Scene {
     this.frame = 0;
     this.stride = 0;
     this.dogTravel = 0;
+    this.dogClock = 0;
     this.x = 180;
   }
 
@@ -114,8 +116,10 @@ export class StreetScene extends Phaser.Scene {
       this.fitStreet(this.hero, 600, crowe ? EDMUND_SIZE : sara ? SARA_SIZE : 1);
       const dog = this.children.getByName('lotta') as Phaser.GameObjects.Image | null;
       if (dog?.active) {
-        const idle = lottaFrameKey('idle', 0);
-        if (dog.texture.key !== idle) dog.setTexture(idle);
+        this.dogClock += dt;
+        const idle = lottaFrameKey('idle', Math.floor(this.dogClock * LOTTA_FPS) % LOTTA_IDLE_FRAMES);
+        if (this.textures.exists(idle) && dog.texture.key !== idle) dog.setTexture(idle);
+        dog.setFlipX(false);
         dog.setPosition(this.x - 170, 600).setOrigin(LOTTA_ORIGIN_X, LOTTA_ORIGIN_Y).setScale(saraScale(600));
       }
       this.arrive();

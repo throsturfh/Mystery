@@ -32,15 +32,19 @@ import {
   LOTTA_ORIGIN_X,
   LOTTA_ORIGIN_Y,
   LOTTA_TROT_STEP,
-  composeLottaHead,
+  LOTTA_FPS,
+  LOTTA_IDLE_FRAMES,
+  LOTTA_TROT_FRAMES,
+  composeLottaGlance,
   glanceTilt,
   glanceWeight,
   headPlacement,
   lottaBodyKey,
   lottaFrameKey,
   lottaHeadKey,
+  nextGlanceHold,
+  nextGlanceWait,
   type GlancePose,
-  type HeadPose,
 } from '../lotta';
 import { SARA_ORIGIN_X, SARA_ORIGIN_Y, SARA_SIZE, SARA_WALK_KEY, playSaraWalk, saraScale, saraSpeed, stopSaraWalk } from '../saraWalk';
 import { SARA_KEY_H, SARA_KEY_W, SARA_REACH_KEY, saraReachAnchor, saraReachFingersKey, saraReachPoint } from '../saraReach';
@@ -550,12 +554,14 @@ export class AdventureScene extends Phaser.Scene {
     this.dogClock = 0;
     this.dogTravel = 0;
     this.dogMoving = false;
+    this.dogStill = 0;
+    this.dogHold = null;
     this.glancing = false;
     this.glancePose = 'up';
     this.glancePrev = null;
     this.glanceElapsed = 0;
-    this.glanceDur = 1.2;
-    this.glanceWait = 4 + Math.random() * 3;
+    this.glanceDur = nextGlanceHold();
+    this.glanceWait = nextGlanceWait();
     this.glanceStamp = '';
   }
 
@@ -563,6 +569,10 @@ export class AdventureScene extends Phaser.Scene {
   private dogClock = 0;
   private dogTravel = 0;
   private dogMoving = false;
+  /** How long she has been still. A single empty frame must not rewind the trot. */
+  private dogStill = 0;
+  /** While set, she trots to this spot and stays there instead of the usual follow. */
+  private dogHold: { x: number; y: number } | null = null;
   private glancing = false;
   private glancePose: GlancePose = 'up';
   private glancePrev: GlancePose | null = null;
@@ -574,48 +584,70 @@ export class AdventureScene extends Phaser.Scene {
   private drawDog(dt: number): void {
     const dog = this.dog;
     if (!dog?.active) return;
-    const goalX = this.fx - this.face * 170;
-    const goalY = this.fy;
+    const goalX = this.dogHold ? this.dogHold.x : this.fx - this.face * 170;
+    const goalY = this.dogHold ? this.dogHold.y : this.fy;
     const dx = goalX - dog.x;
     const dy = goalY - dog.y;
     const dist = Math.hypot(dx, dy);
-    const scale = saraScale(dog.y);
-    const speed = LOTTA_TROT_STEP * scale * 12;
-    if (dist > 2) {
+    const scale = Math.max(0.0001, saraScale(dog.y));
+    const speed = LOTTA_TROT_STEP * scale * LOTTA_FPS;
+    const prevX = dog.x;
+    const prevY = dog.y;
+    if (dist > 0.2) {
       const step = Math.min(dist, speed * dt);
       dog.x += (dx / dist) * step;
       dog.y += (dy / dist) * step;
-      if (Math.abs(dx) > 2) dog.setFlipX(dx < 0);
-      if (this.glancing) this.glancing = false;
-      this.dogMoving = true;
-      this.dogTravel += step / Math.max(0.0001, saraScale(dog.y));
+    }
+    const moved = Math.hypot(dog.x - prevX, dog.y - prevY);
+    // Count every step. A zero-delta frame used to wipe the cycle, so she slid on one picture.
+    if (moved > 0.15) {
+      this.dogStill = 0;
+      if (Math.abs(dog.x - prevX) > 0.15) dog.setFlipX(dog.x < prevX);
+      if (!this.dogMoving) {
+        this.dogMoving = true;
+        this.glancing = false;
+        this.dogFrame = 0;
+        this.dogTravel = 0;
+      }
+      this.dogTravel += moved / scale;
       while (this.dogTravel >= LOTTA_TROT_STEP) {
         this.dogTravel -= LOTTA_TROT_STEP;
-        this.dogFrame = (this.dogFrame + 1) % 8;
+        this.dogFrame = (this.dogFrame + 1) % LOTTA_TROT_FRAMES;
       }
-      this.showLotta('trot', this.dogFrame, false, 'forward', 0);
+      this.showLotta('trot', this.dogFrame % LOTTA_TROT_FRAMES, 0);
     } else {
-      dog.x = goalX;
-      dog.y = goalY;
-      dog.setFlipX(this.face < 0);
-      if (this.dogMoving) {
-        this.dogMoving = false;
-        this.dogFrame = 0;
-        this.dogClock = 0;
-        this.glanceWait = 4 + Math.random() * 3;
-        this.glancing = false;
+      this.dogStill += dt;
+      if (this.dogMoving && this.dogStill < 0.12) {
+        this.showLotta('trot', this.dogFrame % LOTTA_TROT_FRAMES, 0);
+      } else {
+        if (this.dogMoving) {
+          this.dogMoving = false;
+          this.dogFrame = 0;
+          this.dogClock = 0;
+          this.dogTravel = 0;
+          this.glanceWait = nextGlanceWait();
+          this.glancing = false;
+        }
+        this.faceDogIdle(dog);
+        this.dogClock += dt;
+        this.dogFrame = Math.floor(this.dogClock * LOTTA_FPS) % LOTTA_IDLE_FRAMES;
+        this.tickGlance(dt);
+        const weight = this.glancing ? glanceWeight(this.glanceElapsed, this.glanceDur) : 0;
+        this.showLotta('idle', this.dogFrame, weight);
       }
-      this.dogClock += dt;
-      this.dogFrame = Math.floor(this.dogClock * 12) % 24;
-      this.tickGlance(dt);
-      const weight = this.glancing ? glanceWeight(this.glanceElapsed, this.glanceDur) : 0;
-      const pose: HeadPose = weight >= 0.5 ? this.glancePose : 'forward';
-      this.showLotta('idle', this.dogFrame, this.glancing, pose, glanceTilt(this.glancePose, weight));
     }
     dog.setOrigin(LOTTA_ORIGIN_X, LOTTA_ORIGIN_Y);
     dog.setScale(saraScale(dog.y));
     dog.setAngle(0);
     dog.setDepth(490 + dog.y);
+  }
+
+  /** Painted art faces right. When she is idle near Sara, turn toward her. The flip itself is instant. */
+  private faceDogIdle(dog: Phaser.GameObjects.Image): void {
+    const near = Math.hypot(this.fx - dog.x, this.fy - dog.y) < 260;
+    if (!near) return;
+    if (this.fx < dog.x - 8) dog.setFlipX(true);
+    else if (this.fx > dog.x + 8) dog.setFlipX(false);
   }
 
   /** Idle only. A glance lasts 1–1.5s after a 4–7s wait, and never repeats the same pose. */
@@ -626,7 +658,7 @@ export class AdventureScene extends Phaser.Scene {
       const pool = GLANCE_POSES.filter((pose) => pose !== this.glancePrev);
       this.glancePose = pool[Math.floor(Math.random() * pool.length)] ?? 'up';
       this.glancePrev = this.glancePose;
-      this.glanceDur = 1 + Math.random() * 0.5;
+      this.glanceDur = nextGlanceHold();
       this.glanceElapsed = 0;
       this.glancing = true;
       return;
@@ -634,25 +666,36 @@ export class AdventureScene extends Phaser.Scene {
     this.glanceElapsed += dt;
     if (this.glanceElapsed < this.glanceDur) return;
     this.glancing = false;
-    this.glanceWait = 4 + Math.random() * 3;
+    this.glanceWait = nextGlanceWait();
   }
 
-  private showLotta(anim: 'idle' | 'trot', frame: number, glance: boolean, pose: HeadPose, tilt: number): void {
+  private showLotta(anim: 'idle' | 'trot', frame: number, weight: number): void {
     const dog = this.dog;
     if (!dog?.active) return;
-    if (!glance) {
+    const glancing = anim === 'idle' && weight > 0.02;
+    if (!glancing) {
       const key = lottaFrameKey(anim, frame);
       if (this.textures.exists(key) && dog.texture.key !== key) dog.setTexture(key);
       return;
     }
-    const stamp = `${anim}:${frame}:${pose}:${tilt.toFixed(2)}`;
+    const pose = this.glancePose;
+    const stamp = `${anim}:${frame}:${pose}:${weight.toFixed(3)}`;
     if (stamp === this.glanceStamp && dog.texture.key === 'lotta-glance') return;
     this.glanceStamp = stamp;
+    const bodyKey = lottaBodyKey(anim, frame);
+    const forwardKey = lottaHeadKey('forward');
+    const headKey = lottaHeadKey(pose);
+    if (!this.textures.exists(bodyKey) || !this.textures.exists(forwardKey) || !this.textures.exists(headKey)) {
+      const key = lottaFrameKey(anim, frame);
+      if (this.textures.exists(key) && dog.texture.key !== key) dog.setTexture(key);
+      return;
+    }
     const canvas = this.glanceCanvas();
-    const body = this.textures.get(lottaBodyKey(anim, frame)).getSourceImage() as CanvasImageSource;
-    const head = this.textures.get(lottaHeadKey(pose)).getSourceImage() as CanvasImageSource;
+    const body = this.textures.get(bodyKey).getSourceImage() as CanvasImageSource;
+    const forward = this.textures.get(forwardKey).getSourceImage() as CanvasImageSource;
+    const head = this.textures.get(headKey).getSourceImage() as CanvasImageSource;
     const place = headPlacement(anim, frame);
-    composeLottaHead(canvas, body, head, place.dy, place.pivotX, place.pivotY, tilt);
+    composeLottaGlance(canvas, body, forward, head, place.dy, place.pivotX, place.pivotY, glanceTilt(pose, 1), weight);
     (this.textures.get('lotta-glance') as Phaser.Textures.CanvasTexture).refresh();
     if (dog.texture.key !== 'lotta-glance') dog.setTexture('lotta-glance');
   }
@@ -696,8 +739,10 @@ export class AdventureScene extends Phaser.Scene {
     await this.guard(async () => {
       const line = aside(this.save.detective, 'dog', this.save.tone);
       if (!fetchable) {
+        await this.bringDogBeside();
         audio.play('bark');
         await this.say('detective', line || `${this.dogName()} wags. The room, for once, is keeping its secrets in their places.`);
+        this.dogHold = null;
         return;
       }
       audio.play('bark');
@@ -719,6 +764,32 @@ export class AdventureScene extends Phaser.Scene {
       audio.play('pickup');
       this.refresh();
       await this.say('detective', `${this.dogName()} brings you the ${ITEM_NAME[fetchable.item].toLowerCase()}, extremely proud of the procedure.`);
+    });
+  }
+
+  /** Trot to Sara's knee and stay there until the line is done. */
+  private async bringDogBeside(): Promise<void> {
+    const dog = this.dog;
+    if (!dog?.active) return;
+    const side = dog.x <= this.fx ? -1 : 1;
+    const x = this.fx + side * 78;
+    const y = this.fy;
+    this.dogHold = { x, y };
+    const started = performance.now();
+    await new Promise<void>((resolve) => {
+      const check = () => {
+        if (!this.scene.isActive() || !this.dog?.active) {
+          resolve();
+          return;
+        }
+        const dist = Math.hypot(this.dog.x - x, this.dog.y - y);
+        if (dist < 8 || performance.now() - started > 4500) {
+          resolve();
+          return;
+        }
+        this.time.delayedCall(40, check);
+      };
+      check();
     });
   }
 

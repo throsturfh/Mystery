@@ -1,0 +1,41 @@
+{
+  "canvas": [430, 260],
+  "pivotX": 285.95,
+  "note": "pivotX/pivotY is the neck join on the painted canvas. dy shifts the head with that frame's body before the glance rotates about the pivot. Positive tilt is counter-clockwise. Draw the body, then the head with lighter compositing so the feathered neck rebuilds.",
+  "idle": [
+    { "frame": 0, "dy": 0, "pivotY": 112.35 },
+    { "frame": 1, "dy": 0, "pivotY": 112.35 },
+    { "frame": 2, "dy": 0, "pivotY": 112.35 },
+    { "frame": 3, "dy": 0, "pivotY": 112.35 },
+    { "frame": 4, "dy": 0.4, "pivotY": 112.75 },
+    { "frame": 5, "dy": 0.4, "pivotY": 112.75 },
+    { "frame": 6, "dy": 0.4, "pivotY": 112.75 },
+    { "frame": 7, "dy": 0.4, "pivotY": 112.75 },
+    { "frame": 8, "dy": 0.4, "pivotY": 112.75 },
+    { "frame": 9, "dy": 0.4, "pivotY": 112.75 },
+    { "frame": 10, "dy": 0.4, "pivotY": 112.75 },
+    { "frame": 11, "dy": 0.4, "pivotY": 112.75 },
+    { "frame": 12, "dy": 0.4, "pivotY": 112.75 },
+    { "frame": 13, "dy": 0.4, "pivotY": 112.75 },
+    { "frame": 14, "dy": 0.4, "pivotY": 112.75 },
+    { "frame": 15, "dy": 0, "pivotY": 112.35 },
+    { "frame": 16, "dy": 0, "pivotY": 112.35 },
+    { "frame": 17, "dy": 0, "pivotY": 112.35 },
+    { "frame": 18, "dy": 0, "pivotY": 112.35 },
+    { "frame": 19, "dy": 0, "pivotY": 112.35 },
+    { "frame": 20, "dy": 0, "pivotY": 112.35 },
+    { "frame": 21, "dy": 0, "pivotY": 112.35 },
+    { "frame": 22, "dy": -0.4, "pivotY": 111.95 },
+    { "frame": 23, "dy": -0.4, "pivotY": 111.95 }
+  ],
+  "trot": [
+    { "frame": 0, "dy": -1, "pivotY": 111.15 },
+    { "frame": 1, "dy": 0, "pivotY": 112.35 },
+    { "frame": 2, "dy": 1, "pivotY": 113.55 },
+    { "frame": 3, "dy": 0, "pivotY": 112.35 },
+    { "frame": 4, "dy": -1, "pivotY": 111.15 },
+    { "frame": 5, "dy": 0, "pivotY": 112.35 },
+    { "frame": 6, "dy": 1, "pivotY": 113.55 },
+    { "frame": 7, "dy": 0, "pivotY": 112.35 }
+  ]
+}
