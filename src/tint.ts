@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import { strideCount } from './figure';
 import type { Profile } from './profile';
-import { stripRestingLantern } from './restingArm';
+import { canvas2d, stripRestingLantern } from './restingArm';
 
 const FRAMES = ['detective', 'walk-0', 'walk-1', 'walk-2', 'walk-3', 'walk-4', 'walk-5'] as const;
 
@@ -21,7 +21,7 @@ function compose(scene: Phaser.Scene, outKey: string, frame: string, profile: Pr
   const canvas = document.createElement('canvas');
   canvas.width = base.width;
   canvas.height = base.height;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas2d(canvas);
   if (!ctx) return;
   ctx.drawImage(base, 0, 0);
   ctx.drawImage(coat, 0, 0);
@@ -34,7 +34,7 @@ function compose(scene: Phaser.Scene, outKey: string, frame: string, profile: Pr
         existing.width = canvas.width;
         existing.height = canvas.height;
       }
-      const live = existing.getContext('2d');
+      const live = canvas2d(existing);
       live?.clearRect(0, 0, existing.width, existing.height);
       live?.drawImage(canvas, 0, 0);
       (scene.textures.get(outKey) as Phaser.Textures.CanvasTexture).refresh();
@@ -71,7 +71,7 @@ export function paintSaraFrames(scene: Phaser.Scene, profile: Profile): void {
     const texture = scene.textures.get(key);
     const source = texture?.getSourceImage();
     if (source instanceof HTMLCanvasElement) {
-      stripRestingLantern(source, 'sara');
+      stripRestingLantern(source, 'sara', i);
       (texture as Phaser.Textures.CanvasTexture).refresh();
     }
   }
