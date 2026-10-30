@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import { strideCount } from './figure';
 import type { Profile } from './profile';
+import { stripRestingLantern } from './restingArm';
 
 const FRAMES = ['detective', 'walk-0', 'walk-1', 'walk-2', 'walk-3', 'walk-4', 'walk-5'] as const;
 
@@ -65,7 +66,14 @@ export function paintSaraFrames(scene: Phaser.Scene, profile: Profile): void {
   }
   for (let i = 0; i < 16; i++) {
     const name = i.toString().padStart(2, '0');
-    compose(scene, `sara-reach-${name}`, `reach-${name}`, profile);
+    const key = `sara-reach-${name}`;
+    compose(scene, key, `reach-${name}`, profile);
+    const texture = scene.textures.get(key);
+    const source = texture?.getSourceImage();
+    if (source instanceof HTMLCanvasElement) {
+      stripRestingLantern(source, 'sara');
+      (texture as Phaser.Textures.CanvasTexture).refresh();
+    }
   }
 }
 
