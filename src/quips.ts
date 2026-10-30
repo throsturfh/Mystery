@@ -340,10 +340,10 @@ const FLAVOUR: Partial<Record<DetectiveId, Record<string, string[]>>> = {
   },
   sara: {
     edith: ['Edith. The room smells of tea and a dog who has already decided who is safe.', 'She keeps files. I keep a dog. Between us, something gets found.'],
-    june: ['June. Skuggi sat before I did. He only does that for people who are telling the truth, or holding treats.', 'She is tired in the way trainers know. The shop has been pulling on the lead.'],
-    ambrose: ['He is not a threat. Skuggi would have said so, loudly, and then hidden behind my boots.', 'A ghost who shelves books. I have trained worse habits.'],
-    chair: ['The chair moves. Skuggi watches it and does not growl. That is a vote.', 'Empty chairs that rock are just dogs who have not learned "stay".'],
-    doorbell: ['The bell rings at nothing. Skuggi\'s ears say the nothing has feet.', 'June flinches. The dog does not. I trust the dog.'],
+    june: ['June. Lotta sat before I did. She only does that for people who are telling the truth, or holding treats.', 'She is tired in the way trainers know. The shop has been pulling on the lead.'],
+    ambrose: ['He is not a threat. Lotta would have said so, loudly, and then hidden behind my boots.', 'A ghost who shelves books. I have trained worse habits.'],
+    chair: ['The chair moves. Lotta watches it and does not growl. That is a vote.', 'Empty chairs that rock are just dogs who have not learned "stay".'],
+    doorbell: ['The bell rings at nothing. Lotta\'s ears say the nothing has feet.', 'June flinches. The dog does not. I trust the dog.'],
     shelf: ['A gap the size of a book, or a dog\'s mistake. This one is a book.', 'Put the thing back where it lives. That is half of training, and all of this case.'],
   },
   barty: {

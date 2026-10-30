@@ -58,7 +58,7 @@ export interface Ctx {
   sfx(name: string, pan?: number): void;
   face(who: 'edith' | 'june' | 'ambrose'): Promise<void>;
   handoff(): Promise<void>;
-  /** Edmund plays the reach. Other detectives keep the short pick pose. The item is added when it lands. */
+  /** Edmund and Sara play the painted reach. Other detectives keep the short pick pose. The item is added when it lands. */
   reach(item: ItemId, from: { x: number; y: number }): Promise<void>;
   openMap(): Promise<void>;
   card(): Promise<void>;

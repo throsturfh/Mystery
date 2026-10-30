@@ -5,6 +5,8 @@ import { ENTRY } from '../story';
 import { loadSave, writeSave, type RoomId } from '../save';
 import { EDMUND_SIZE, playEdmundWalk, stopEdmundWalk, edmundSpeed } from '../edmundWalk';
 import { figurePixels, opaqueHeight, strideCount } from '../figure';
+import { LOTTA_ORIGIN_X, LOTTA_ORIGIN_Y, LOTTA_TROT_STEP, lottaFrameKey } from '../lotta';
+import { SARA_SIZE, SARA_WALK_KEY, playSaraWalk, saraScale, saraSpeed, stopSaraWalk } from '../saraWalk';
 import { idleKey, paintHero, walkKey } from '../tint';
 
 const FONT = 'Cormorant Garamond, Georgia, serif';
@@ -18,6 +20,7 @@ export class StreetScene extends Phaser.Scene {
   private x = 200;
   private frame = 0;
   private stride = 0;
+  private dogTravel = 0;
   private goal = 760;
   private done = false;
   private leaving = false;
@@ -32,6 +35,7 @@ export class StreetScene extends Phaser.Scene {
     this.leaving = false;
     this.frame = 0;
     this.stride = 0;
+    this.dogTravel = 0;
     this.x = 180;
   }
 
@@ -52,12 +56,14 @@ export class StreetScene extends Phaser.Scene {
     this.goal = this.dest === 'lantern' ? 1040 : 620;
     const profile = { name: save.name, detective: save.detective, coat: save.coat, hat: save.hat, scarf: save.scarf, tone: save.tone };
     this.hero = this.add.sprite(this.x, 640, idleKey(profile)).setOrigin(0.5, 1).setScale(0.28);
-    this.hero.on(Phaser.Animations.Events.ANIMATION_UPDATE, (_anim: Phaser.Animations.Animation, frame: Phaser.Animations.AnimationFrame) => {
-      if (loadSave().detective !== 'crowe' || this.done) return;
-      if (frame.index === 1 || frame.index === 7) audio.play('foot');
+    this.hero.on(Phaser.Animations.Events.ANIMATION_UPDATE, (anim: Phaser.Animations.Animation, frame: Phaser.Animations.AnimationFrame) => {
+      if (this.done) return;
+      const who = loadSave().detective;
+      const painted = (who === 'crowe' && anim.key === 'edmund-walk') || (who === 'sara' && anim.key === SARA_WALK_KEY);
+      if (painted && (frame.index === 1 || frame.index === 7)) audio.play('foot');
     });
-    if (save.detective === 'sara' && this.textures.exists('skuggi')) {
-      this.add.image(this.x - 70, 648, 'skuggi').setOrigin(0.5, 1).setScale(0.28).setName('skuggi');
+    if (save.detective === 'sara' && this.textures.exists(lottaFrameKey('trot', 0))) {
+      this.add.image(this.x - 170, 648, lottaFrameKey('idle', 0)).setOrigin(LOTTA_ORIGIN_X, LOTTA_ORIGIN_Y).setName('lotta');
     }
     this.events.once('shutdown', () => {
       this.leaving = true;
@@ -80,12 +86,16 @@ export class StreetScene extends Phaser.Scene {
     const profile = { name: save.name, detective: save.detective, coat: save.coat, hat: save.hat, scarf: save.scarf, tone: save.tone };
     const dt = Math.min(0.05, delta / 1000);
     const crowe = save.detective === 'crowe';
+    const sara = save.detective === 'sara';
     const tNow = (this.x - 180) / Math.max(1, this.goal - 180);
     const yNow = 640 - tNow * (this.dest === 'lantern' ? 70 : 40);
-    const step = (crowe ? edmundSpeed(yNow) : 140) * dt;
+    const step = (crowe ? edmundSpeed(yNow) : sara ? saraSpeed(yNow) : 140) * dt;
+    let moved = 0;
     if (this.x < this.goal) {
+      const before = this.x;
       this.x = Math.min(this.goal, this.x + step);
-      if (!crowe) {
+      moved = this.x - before;
+      if (!crowe && !sara) {
         this.stride += step;
         if (this.stride > 14) {
           this.stride = 0;
@@ -97,10 +107,17 @@ export class StreetScene extends Phaser.Scene {
       }
     } else {
       if (crowe) stopEdmundWalk(this.hero);
+      if (sara) stopSaraWalk(this.hero);
       const key = idleKey(profile);
       if (this.hero.texture.key !== key) this.hero.setTexture(key);
       this.hero.setPosition(this.x, 600);
-      this.fitStreet(this.hero, 600, crowe ? EDMUND_SIZE : 1);
+      this.fitStreet(this.hero, 600, crowe ? EDMUND_SIZE : sara ? SARA_SIZE : 1);
+      const dog = this.children.getByName('lotta') as Phaser.GameObjects.Image | null;
+      if (dog?.active) {
+        const idle = lottaFrameKey('idle', 0);
+        if (dog.texture.key !== idle) dog.setTexture(idle);
+        dog.setPosition(this.x - 170, 600).setOrigin(LOTTA_ORIGIN_X, LOTTA_ORIGIN_Y).setScale(saraScale(600));
+      }
       this.arrive();
       return;
     }
@@ -108,15 +125,15 @@ export class StreetScene extends Phaser.Scene {
     const y = 640 - t * (this.dest === 'lantern' ? 70 : 40);
     this.hero.setPosition(this.x, y).setFlipX(false);
     if (crowe) playEdmundWalk(this.hero, y);
+    else if (sara) playSaraWalk(this.hero, y);
     else this.fitStreet(this.hero, y);
-    const dog = this.children.getByName('skuggi') as Phaser.GameObjects.Image | null;
+    const dog = this.children.getByName('lotta') as Phaser.GameObjects.Image | null;
     if (dog?.active) {
-      const frame = Math.floor(this.x / 18) % 8;
-      const key = `skuggi-walk-${frame}`;
-      if (this.textures.exists(key)) dog.setTexture(key);
-      dog.setPosition(this.x - 78, y + 6);
-      const source = dog.texture.getSourceImage() as CanvasImageSource;
-      dog.setScale((figurePixels(y) * 0.42) / opaqueHeight(source, dog.texture.key));
+      this.dogTravel += moved / Math.max(0.0001, saraScale(y));
+      const frame = Math.floor(this.dogTravel / LOTTA_TROT_STEP) % 8;
+      const key = lottaFrameKey('trot', frame);
+      if (this.textures.exists(key) && dog.texture.key !== key) dog.setTexture(key);
+      dog.setPosition(this.x - 170, y).setOrigin(LOTTA_ORIGIN_X, LOTTA_ORIGIN_Y).setScale(saraScale(y));
     }
   }
 

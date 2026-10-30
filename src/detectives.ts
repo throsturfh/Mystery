@@ -44,10 +44,10 @@ export const DETECTIVES: DetectiveDef[] = [
   },
   {
     id: 'sara',
-    label: 'Sara Lind',
-    defaultName: 'Sara Lind',
+    label: 'Sara Kristín',
+    defaultName: 'Sara Kristín',
     blurb: 'Dog trainer by day. Ghost detective when the bell rings after hours.',
-    dog: 'Skuggi',
+    dog: 'Lotta',
     coat: 'Jacket',
     hat: 'Cap',
     scarf: 'Scarf',

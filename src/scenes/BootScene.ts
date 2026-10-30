@@ -2,6 +2,10 @@ import Phaser from 'phaser';
 import { AUDIO_FILES, audio } from '../audio';
 import { EDMUND_REACH_FPS, EDMUND_REACH_FRAMES, EDMUND_REACH_KEY, reachFingersKey, reachFrameKey } from '../edmundReach';
 import { EDMUND_WALK_FPS, EDMUND_WALK_FRAMES, EDMUND_WALK_KEY, edmundFrameKey } from '../edmundWalk';
+import { LOTTA_IDLE_FRAMES, LOTTA_TROT_FRAMES, lottaBodyKey, lottaFrameKey, lottaHeadKey } from '../lotta';
+import { SARA_REACH_FPS, SARA_REACH_FRAMES, SARA_REACH_KEY, saraReachFingersKey, saraReachFrameKey } from '../saraReach';
+import { SARA_WALK_FPS, SARA_WALK_FRAMES, SARA_WALK_KEY, saraFrameKey } from '../saraWalk';
+import { paintSaraFrames } from '../tint';
 import { AdventureScene } from './AdventureScene';
 import { MapScene } from './MapScene';
 import { StreetScene } from './StreetScene';
@@ -25,7 +29,6 @@ export class BootScene extends Phaser.Scene {
     this.load.image('map', asset('map.jpg'));
     this.load.image('street', asset('street.jpg'));
     this.load.image('trophy', asset('trophy.jpg'));
-    this.load.image('skuggi', asset('cast/skuggi.png'));
     this.load.image('june', asset('june.png'));
     this.load.image('june-nokeys', asset('june-nokeys.png'));
     const frames = ['detective', 'walk-0', 'walk-1', 'walk-2', 'walk-3', 'walk-4', 'walk-5'];
@@ -38,7 +41,20 @@ export class BootScene extends Phaser.Scene {
       for (const id of hats) this.load.image(`L-${frame}-hat-${id}`, asset(`layers/${frame}-hat-${id}.png`));
       for (const id of scarves) this.load.image(`L-${frame}-scarf-${id}`, asset(`layers/${frame}-scarf-${id}.png`));
     }
-    for (let i = 0; i < 8; i++) this.load.image(`skuggi-walk-${i}`, asset(`cast/skuggi-walk-${i}.png`));
+    for (let i = 0; i < LOTTA_IDLE_FRAMES; i++) {
+      const name = i.toString().padStart(2, '0');
+      this.load.image(lottaFrameKey('idle', i), asset(`lotta/idle-${name}.webp`));
+      this.load.image(lottaBodyKey('idle', i), asset(`lotta/layers/idle-${name}-body-nohead.webp`));
+    }
+    for (let i = 0; i < LOTTA_TROT_FRAMES; i++) {
+      const name = i.toString().padStart(2, '0');
+      this.load.image(lottaFrameKey('trot', i), asset(`lotta/trot-${name}.webp`));
+      this.load.image(lottaBodyKey('trot', i), asset(`lotta/layers/trot-${name}-body-nohead.webp`));
+    }
+    for (const pose of ['forward', 'back', 'up', 'side'] as const) {
+      this.load.image(lottaHeadKey(pose), asset(`lotta/layers/head-${pose}.webp`));
+    }
+    this.loadSaraPainted(coats, hats, scarves);
     for (let i = 0; i < EDMUND_WALK_FRAMES; i++) {
       const name = i.toString().padStart(2, '0');
       this.load.image(edmundFrameKey(i), asset(`edmund-walk/walk-${name}.png`));
@@ -92,8 +108,50 @@ export class BootScene extends Phaser.Scene {
       repeat: 0,
       skipMissedFrames: false,
     });
+    paintSaraFrames(this, {
+      name: 'Sara Kristín',
+      detective: 'sara',
+      coat: 'tan',
+      hat: 'brown',
+      scarf: 'plaid',
+      tone: 'sarcastic',
+    });
+    this.anims.create({
+      key: SARA_WALK_KEY,
+      frames: Array.from({ length: SARA_WALK_FRAMES }, (_, index) => ({ key: saraFrameKey(index) })),
+      frameRate: SARA_WALK_FPS,
+      repeat: -1,
+      skipMissedFrames: false,
+    });
+    this.anims.create({
+      key: SARA_REACH_KEY,
+      frames: Array.from({ length: SARA_REACH_FRAMES }, (_, index) => ({ key: saraReachFrameKey(index) })),
+      frameRate: SARA_REACH_FPS,
+      repeat: 0,
+      skipMissedFrames: false,
+    });
     audio.bind(this);
     this.scene.start('title');
+  }
+
+  /** Sara's walk and reach colour layers. Stacked later, in the same order as the standing portrait. */
+  private loadSaraPainted(coats: string[], hats: string[], scarves: string[]): void {
+    const loadSet = (kind: 'walk' | 'reach', count: number) => {
+      for (let i = 0; i < count; i++) {
+        const frame = `${kind}-${i.toString().padStart(2, '0')}`;
+        this.load.image(`L-sara-${frame}-base`, asset(`sara-${kind}/layers/${frame}-base.webp`));
+        for (const id of coats) this.load.image(`L-sara-${frame}-coat-${id}`, asset(`sara-${kind}/layers/${frame}-coat-${id}.webp`));
+        for (const id of hats) this.load.image(`L-sara-${frame}-hat-${id}`, asset(`sara-${kind}/layers/${frame}-hat-${id}.webp`));
+        for (const id of scarves) this.load.image(`L-sara-${frame}-scarf-${id}`, asset(`sara-${kind}/layers/${frame}-scarf-${id}.webp`));
+      }
+    };
+    loadSet('walk', SARA_WALK_FRAMES);
+    loadSet('reach', SARA_REACH_FRAMES);
+    for (let i = 10; i < SARA_REACH_FRAMES; i++) {
+      const name = i.toString().padStart(2, '0');
+      this.load.image(saraReachFingersKey(i), asset(`sara-reach/reach-${name}-fingers.webp`));
+    }
+    this.load.image('sara-reach-key', asset('sara-reach/key.webp'));
   }
 
   /** A slim upright spine, so the returned book can sit in the shelf gap. */

@@ -25,6 +25,25 @@ import { detectiveById } from '../detectives';
 import { EDMUND_ORIGIN_X, EDMUND_ORIGIN_Y, EDMUND_SIZE, edmundScale, playEdmundWalk, stopEdmundWalk, edmundSpeed } from '../edmundWalk';
 import { EDMUND_REACH_KEY, reachAnchor, reachFingersKey, reachHand } from '../edmundReach';
 import { figurePixels, opaqueHeight, strideCount } from '../figure';
+import {
+  GLANCE_POSES,
+  LOTTA_FRAME_H,
+  LOTTA_FRAME_W,
+  LOTTA_ORIGIN_X,
+  LOTTA_ORIGIN_Y,
+  LOTTA_TROT_STEP,
+  composeLottaHead,
+  glanceTilt,
+  glanceWeight,
+  headPlacement,
+  lottaBodyKey,
+  lottaFrameKey,
+  lottaHeadKey,
+  type GlancePose,
+  type HeadPose,
+} from '../lotta';
+import { SARA_ORIGIN_X, SARA_ORIGIN_Y, SARA_SIZE, SARA_WALK_KEY, playSaraWalk, saraScale, saraSpeed, stopSaraWalk } from '../saraWalk';
+import { SARA_KEY_H, SARA_KEY_W, SARA_REACH_KEY, saraReachAnchor, saraReachFingersKey, saraReachPoint } from '../saraReach';
 import { idleKey, paintHero, walkKey } from '../tint';
 import { aside } from '../voices';
 
@@ -136,9 +155,10 @@ export class AdventureScene extends Phaser.Scene {
     this.ctx = this.makeCtx();
     this.shadow = this.add.ellipse(0, 0, 86, 18, 0x000000, 0.35).setDepth(90);
     this.hero = this.add.sprite(0, 0, 'hero').setOrigin(0.5, 1).setDepth(700);
-    this.hero.on(Phaser.Animations.Events.ANIMATION_UPDATE, (_anim: Phaser.Animations.Animation, frame: Phaser.Animations.AnimationFrame) => {
-      if (this.save.detective !== 'crowe' || !this.walking) return;
-      if (frame.index === 1 || frame.index === 7) audio.play('foot');
+    this.hero.on(Phaser.Animations.Events.ANIMATION_UPDATE, (anim: Phaser.Animations.Animation, frame: Phaser.Animations.AnimationFrame) => {
+      if (!this.walking) return;
+      const painted = (this.save.detective === 'crowe' && anim.key === 'edmund-walk') || (this.save.detective === 'sara' && anim.key === SARA_WALK_KEY);
+      if (painted && (frame.index === 1 || frame.index === 7)) audio.play('foot');
     });
     this.hudGfx = this.add.graphics().setDepth(2000);
     this.caption = this.add
@@ -249,7 +269,7 @@ export class AdventureScene extends Phaser.Scene {
       const dx = this.goal.x - this.fx;
       const dy = this.goal.y - this.fy;
       const dist = Math.hypot(dx, dy);
-      const step = (this.save.detective === 'crowe' ? edmundSpeed(this.fy) : 240) * dt;
+      const step = this.moveSpeed() * dt;
       if (dist <= step) {
         const face = Math.abs(dx) > 2 ? (dx < 0 ? -1 : 1) : this.face;
         this.place(this.goal.x, this.goal.y, face);
@@ -259,7 +279,7 @@ export class AdventureScene extends Phaser.Scene {
         this.walkResolve = null;
         done?.(true);
       } else {
-        if (this.save.detective !== 'crowe') {
+        if (!this.paintedHero()) {
           this.stride += step;
           const per = 16;
           while (this.stride >= per) {
@@ -273,7 +293,7 @@ export class AdventureScene extends Phaser.Scene {
     }
     this.drawFog(dt);
     this.drawHero(dt);
-    this.drawDog();
+    this.drawDog(dt);
     const talking = this.mode === 'speech' || this.mode === 'choice' || this.mode === 'card' || this.mode === 'menu' || this.mode === 'confirm';
     this.plaque.setVisible(this.save.room === 'office' && this.save.flags.seenEnding === true && !talking);
     this.lane.setVisible(this.save.room === 'office' && this.save.flags.seenEnding === true && !talking);
@@ -521,38 +541,131 @@ export class AdventureScene extends Phaser.Scene {
   }
 
   private placeDog(): void {
-    if (this.save.detective !== 'sara' || !this.textures.exists('skuggi')) return;
-    this.dog = this.add.image(this.fx - 96, this.fy + 6, 'skuggi').setOrigin(0.5, 1).setDepth(500 + this.fy);
-    this.fit(this.dog, this.fy, 0.42);
+    const idle = lottaFrameKey('idle', 0);
+    if (this.save.detective !== 'sara' || !this.textures.exists(idle)) return;
+    this.dog = this.add.image(this.fx - this.face * 170, this.fy, idle).setOrigin(LOTTA_ORIGIN_X, LOTTA_ORIGIN_Y).setDepth(490 + this.fy);
+    this.dog.setScale(saraScale(this.fy));
     this.props.push(this.dog);
+    this.dogFrame = 0;
+    this.dogClock = 0;
+    this.dogTravel = 0;
+    this.dogMoving = false;
+    this.glancing = false;
+    this.glancePose = 'up';
+    this.glancePrev = null;
+    this.glanceElapsed = 0;
+    this.glanceDur = 1.2;
+    this.glanceWait = 4 + Math.random() * 3;
+    this.glanceStamp = '';
   }
 
   private dogFrame = 0;
-  private dogStride = 0;
+  private dogClock = 0;
+  private dogTravel = 0;
+  private dogMoving = false;
+  private glancing = false;
+  private glancePose: GlancePose = 'up';
+  private glancePrev: GlancePose | null = null;
+  private glanceElapsed = 0;
+  private glanceDur = 1.2;
+  private glanceWait = 5;
+  private glanceStamp = '';
 
-  private drawDog(): void {
+  private drawDog(dt: number): void {
     const dog = this.dog;
     if (!dog?.active) return;
-    const goalX = this.fx - this.face * 78;
-    const goalY = this.fy + 2;
-    const step = Math.hypot(goalX - dog.x, goalY - dog.y);
-    dog.x += (goalX - dog.x) * 0.08;
-    dog.y += (goalY - dog.y) * 0.12;
-    dog.setFlipX(dog.x > this.fx);
-    dog.setDepth(490 + dog.y);
-    if (step > 8) {
-      this.dogStride += step;
-      if (this.dogStride > 14) {
-        this.dogStride = 0;
+    const goalX = this.fx - this.face * 170;
+    const goalY = this.fy;
+    const dx = goalX - dog.x;
+    const dy = goalY - dog.y;
+    const dist = Math.hypot(dx, dy);
+    const scale = saraScale(dog.y);
+    const speed = LOTTA_TROT_STEP * scale * 12;
+    if (dist > 2) {
+      const step = Math.min(dist, speed * dt);
+      dog.x += (dx / dist) * step;
+      dog.y += (dy / dist) * step;
+      if (Math.abs(dx) > 2) dog.setFlipX(dx < 0);
+      if (this.glancing) this.glancing = false;
+      this.dogMoving = true;
+      this.dogTravel += step / Math.max(0.0001, saraScale(dog.y));
+      while (this.dogTravel >= LOTTA_TROT_STEP) {
+        this.dogTravel -= LOTTA_TROT_STEP;
         this.dogFrame = (this.dogFrame + 1) % 8;
-        const key = `skuggi-walk-${this.dogFrame}`;
-        if (this.textures.exists(key)) dog.setTexture(key);
       }
-    } else if (dog.texture.key !== 'skuggi') {
-      dog.setTexture('skuggi');
+      this.showLotta('trot', this.dogFrame, false, 'forward', 0);
+    } else {
+      dog.x = goalX;
+      dog.y = goalY;
+      dog.setFlipX(this.face < 0);
+      if (this.dogMoving) {
+        this.dogMoving = false;
+        this.dogFrame = 0;
+        this.dogClock = 0;
+        this.glanceWait = 4 + Math.random() * 3;
+        this.glancing = false;
+      }
+      this.dogClock += dt;
+      this.dogFrame = Math.floor(this.dogClock * 12) % 24;
+      this.tickGlance(dt);
+      const weight = this.glancing ? glanceWeight(this.glanceElapsed, this.glanceDur) : 0;
+      const pose: HeadPose = weight >= 0.5 ? this.glancePose : 'forward';
+      this.showLotta('idle', this.dogFrame, this.glancing, pose, glanceTilt(this.glancePose, weight));
     }
-    this.fit(dog, dog.y, 0.42);
-    dog.setAngle(step > 8 ? Math.sin(this.time.now / 180) * 1.4 : 0);
+    dog.setOrigin(LOTTA_ORIGIN_X, LOTTA_ORIGIN_Y);
+    dog.setScale(saraScale(dog.y));
+    dog.setAngle(0);
+    dog.setDepth(490 + dog.y);
+  }
+
+  /** Idle only. A glance lasts 1–1.5s after a 4–7s wait, and never repeats the same pose. */
+  private tickGlance(dt: number): void {
+    if (!this.glancing) {
+      this.glanceWait -= dt;
+      if (this.glanceWait > 0) return;
+      const pool = GLANCE_POSES.filter((pose) => pose !== this.glancePrev);
+      this.glancePose = pool[Math.floor(Math.random() * pool.length)] ?? 'up';
+      this.glancePrev = this.glancePose;
+      this.glanceDur = 1 + Math.random() * 0.5;
+      this.glanceElapsed = 0;
+      this.glancing = true;
+      return;
+    }
+    this.glanceElapsed += dt;
+    if (this.glanceElapsed < this.glanceDur) return;
+    this.glancing = false;
+    this.glanceWait = 4 + Math.random() * 3;
+  }
+
+  private showLotta(anim: 'idle' | 'trot', frame: number, glance: boolean, pose: HeadPose, tilt: number): void {
+    const dog = this.dog;
+    if (!dog?.active) return;
+    if (!glance) {
+      const key = lottaFrameKey(anim, frame);
+      if (this.textures.exists(key) && dog.texture.key !== key) dog.setTexture(key);
+      return;
+    }
+    const stamp = `${anim}:${frame}:${pose}:${tilt.toFixed(2)}`;
+    if (stamp === this.glanceStamp && dog.texture.key === 'lotta-glance') return;
+    this.glanceStamp = stamp;
+    const canvas = this.glanceCanvas();
+    const body = this.textures.get(lottaBodyKey(anim, frame)).getSourceImage() as CanvasImageSource;
+    const head = this.textures.get(lottaHeadKey(pose)).getSourceImage() as CanvasImageSource;
+    const place = headPlacement(anim, frame);
+    composeLottaHead(canvas, body, head, place.dy, place.pivotX, place.pivotY, tilt);
+    (this.textures.get('lotta-glance') as Phaser.Textures.CanvasTexture).refresh();
+    if (dog.texture.key !== 'lotta-glance') dog.setTexture('lotta-glance');
+  }
+
+  private glanceCanvas(): HTMLCanvasElement {
+    if (this.textures.exists('lotta-glance')) {
+      return this.textures.get('lotta-glance').getSourceImage() as HTMLCanvasElement;
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = LOTTA_FRAME_W;
+    canvas.height = LOTTA_FRAME_H;
+    this.textures.addCanvas('lotta-glance', canvas);
+    return canvas;
   }
 
   private glideBook(): Promise<void> {
@@ -575,7 +688,7 @@ export class AdventureScene extends Phaser.Scene {
   }
 
   private dogName(): string {
-    return detectiveById('sara').dog ?? 'Skuggi';
+    return detectiveById('sara').dog ?? 'Lotta';
   }
 
   private async onDog(): Promise<void> {
@@ -588,7 +701,7 @@ export class AdventureScene extends Phaser.Scene {
         return;
       }
       audio.play('bark');
-      await this.say('detective', `${this.dogName()}'s ears come up. He would like a job.`);
+      await this.say('detective', `${this.dogName()}'s ears come up. She would like a job.`);
       const dog = this.dog;
       if (dog?.active) {
         await new Promise<void>((resolve) => {
@@ -786,19 +899,42 @@ export class AdventureScene extends Phaser.Scene {
     return { angle: 0, y: 0 };
   }
 
+  private paintedHero(): boolean {
+    return this.save.detective === 'crowe' || this.save.detective === 'sara';
+  }
+
+  private heroPortion(): number {
+    if (this.save.detective === 'crowe') return EDMUND_SIZE;
+    if (this.save.detective === 'sara') return SARA_SIZE;
+    return 1;
+  }
+
+  private moveSpeed(): number {
+    if (this.save.detective === 'crowe') return edmundSpeed(this.fy);
+    if (this.save.detective === 'sara') return saraSpeed(this.fy);
+    return 240;
+  }
+
   private drawHero(_dt: number): void {
     const posing = this.time.now < this.poseUntil;
     if (!posing) this.pose = 'none';
     const look = this.profile();
-    const croweWalk = this.save.detective === 'crowe' && this.walking && !posing && !this.reaching;
-    if (this.reaching && this.save.detective === 'crowe') {
+    const who = this.save.detective;
+    const paintedWalk = this.paintedHero() && this.walking && !posing && !this.reaching;
+    if (this.reaching && who === 'crowe') {
       this.hero.setOrigin(EDMUND_ORIGIN_X, EDMUND_ORIGIN_Y);
       this.hero.setScale(edmundScale(this.fy));
-    } else if (croweWalk) {
+    } else if (this.reaching && who === 'sara') {
+      this.hero.setOrigin(SARA_ORIGIN_X, SARA_ORIGIN_Y);
+      this.hero.setScale(saraScale(this.fy));
+    } else if (paintedWalk && who === 'crowe') {
       // One scale for the whole cycle. Fitting each frame to its own opaque height pulsed him.
       playEdmundWalk(this.hero, this.fy);
+    } else if (paintedWalk && who === 'sara') {
+      playSaraWalk(this.hero, this.fy);
     } else {
-      if (this.save.detective === 'crowe') stopEdmundWalk(this.hero);
+      if (who === 'crowe') stopEdmundWalk(this.hero);
+      if (who === 'sara') stopSaraWalk(this.hero);
       if (this.walking && !posing) {
         const key = walkKey(look, this.walkFrame);
         if (this.hero.texture.key !== key && this.textures.exists(key)) this.hero.setTexture(key);
@@ -806,7 +942,7 @@ export class AdventureScene extends Phaser.Scene {
         const key = idleKey(look);
         if (this.hero.texture.key !== key) this.hero.setTexture(key);
       }
-      this.fit(this.hero, this.fy, this.save.detective === 'crowe' ? EDMUND_SIZE : 1);
+      this.fit(this.hero, this.fy, this.heroPortion());
     }
     const breath = this.walking ? 0 : Math.sin(this.time.now / 980) * 1.1;
     const gesture = this.gesture(this.time.now);
@@ -817,7 +953,7 @@ export class AdventureScene extends Phaser.Scene {
     this.hero.setAlpha(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 0.55 : 1);
     this.hero.setDepth(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 900 : 500 + this.fy);
     this.shadow.setPosition(this.fx, this.fy + 2);
-    const shadow = (figurePixels(this.fy) / 320) * (this.save.detective === 'crowe' ? EDMUND_SIZE : 1);
+    const shadow = (figurePixels(this.fy) / 320) * this.heroPortion();
     this.shadow.setScale(shadow, shadow * 0.85);
     this.shadow.setAlpha(this.save.room === 'stock' && this.save.flags.lanternLit !== true ? 0.15 : 0.35);
   }
@@ -1330,7 +1466,7 @@ export class AdventureScene extends Phaser.Scene {
   }
 
   private playReach(item: ItemId, from: { x: number; y: number }, onHold?: () => void): Promise<void> {
-    if (this.save.detective !== 'crowe') {
+    if (!this.paintedHero()) {
       if (!this.save.items.includes(item)) this.save.items.push(item);
       this.pose = 'pick';
       this.poseFrom = this.time.now;
@@ -1338,6 +1474,7 @@ export class AdventureScene extends Phaser.Scene {
       this.refresh();
       return Promise.resolve();
     }
+    const sara = this.save.detective === 'sara';
     this.walking = false;
     this.goal = null;
     this.pose = 'none';
@@ -1350,19 +1487,31 @@ export class AdventureScene extends Phaser.Scene {
     }
     this.reachHeld?.destroy();
     this.reachFingers?.destroy();
-    const icon = item === 'book' ? 'icon-greenbook' : `icon-${item}`;
+    const paintedKey = sara && item === 'key' && this.textures.exists('sara-reach-key');
+    const icon = paintedKey ? 'sara-reach-key' : item === 'book' ? 'icon-greenbook' : `icon-${item}`;
     this.reachFrom = from;
     this.reachItemId = item;
     this.reachGripped = false;
     this.reachOnHold = onHold ?? null;
-    this.reachHeld = this.add.image(from.x, from.y, icon).setOrigin(0.5, 0.5).setDisplaySize(24, 24).setDepth(this.fy + 2);
-    this.reachFingers = this.add.image(this.fx, this.fy, reachFingersKey(10)).setOrigin(EDMUND_ORIGIN_X, EDMUND_ORIGIN_Y).setVisible(false);
+    this.reachHeld = this.add.image(from.x, from.y, icon).setOrigin(0.5, 0.5).setDepth(this.fy + 2);
+    if (paintedKey) {
+      const scale = saraScale(this.fy);
+      this.reachHeld.setDisplaySize(SARA_KEY_W * scale, SARA_KEY_H * scale);
+    } else {
+      this.reachHeld.setDisplaySize(24, 24);
+    }
+    const fingers = sara ? saraReachFingersKey(10) : reachFingersKey(10);
+    this.reachFingers = this.add
+      .image(this.fx, this.fy, fingers)
+      .setOrigin(sara ? SARA_ORIGIN_X : EDMUND_ORIGIN_X, sara ? SARA_ORIGIN_Y : EDMUND_ORIGIN_Y)
+      .setVisible(false);
     this.reaching = true;
     if (this.hero.anims.isPlaying) this.hero.anims.stop();
-    this.hero.play({ key: EDMUND_REACH_KEY, repeat: 0 });
+    const animKey = sara ? SARA_REACH_KEY : EDMUND_REACH_KEY;
+    this.hero.play({ key: animKey, repeat: 0 });
     return new Promise((resolve) => {
       const done = (anim: Phaser.Animations.Animation) => {
-        if (anim.key !== EDMUND_REACH_KEY) return;
+        if (anim.key !== animKey) return;
         this.hero.off(Phaser.Animations.Events.ANIMATION_COMPLETE, done);
         this.pocketReach(resolve);
       };
@@ -1375,8 +1524,34 @@ export class AdventureScene extends Phaser.Scene {
     const fingers = this.reachFingers;
     if (!held?.active || !fingers?.active) return;
     const frame = Math.max(0, (this.hero.anims.currentFrame?.index ?? 1) - 1);
-    const anchor = reachAnchor(frame);
     const flip = this.face < 0;
+    if (this.save.detective === 'sara') {
+      const anchor = saraReachAnchor(frame);
+      const scale = saraScale(this.fy);
+      const hand = saraReachPoint(this.hero.x, this.hero.y, this.fy, flip, anchor.handX, anchor.handY);
+      fingers.setOrigin(SARA_ORIGIN_X, SARA_ORIGIN_Y).setPosition(this.hero.x, this.hero.y).setScale(scale).setFlipX(flip).setDepth(this.hero.depth + 2);
+      if (anchor.phase === 'holding') {
+        if (!this.reachGripped) {
+          this.reachGripped = true;
+          this.reachOnHold?.();
+          this.reachOnHold = null;
+        }
+        if (this.reachItemId === 'key' && anchor.key && held.texture.key === 'sara-reach-key') {
+          const grip = saraReachPoint(this.hero.x, this.hero.y, this.fy, flip, anchor.key.x, anchor.key.y);
+          held.setPosition(grip.x, grip.y).setDisplaySize(SARA_KEY_W * scale, SARA_KEY_H * scale).setFlipX(flip).setAngle(anchor.key.angle).setDepth(this.hero.depth + 1);
+        } else {
+          held.setPosition(hand.x, hand.y).setDisplaySize(22, 22).setAngle(0).setDepth(this.hero.depth + 1);
+        }
+        const overlay = saraReachFingersKey(frame);
+        if (this.textures.exists(overlay)) fingers.setTexture(overlay).setVisible(true);
+      } else {
+        const t = Math.min(1, frame / 9);
+        held.setPosition(this.reachFrom.x + (hand.x - this.reachFrom.x) * t, this.reachFrom.y + (hand.y - this.reachFrom.y) * t).setAngle(0).setDepth(this.hero.depth + 1);
+        fingers.setVisible(false);
+      }
+      return;
+    }
+    const anchor = reachAnchor(frame);
     const scale = edmundScale(this.fy);
     const hand = reachHand(this.hero.x, this.hero.y, this.fy, flip, frame);
     fingers.setPosition(this.hero.x, this.hero.y).setScale(scale).setFlipX(flip).setDepth(this.hero.depth + 2);
@@ -1427,7 +1602,7 @@ export class AdventureScene extends Phaser.Scene {
   }
 
   private handoffKey(): Promise<void> {
-    if (this.save.detective !== 'crowe') return this.handoffKeyPlain();
+    if (!this.paintedHero()) return this.handoffKeyPlain();
     this.clearSpeech();
     const june = this.june;
     const toward = this.fx < (june?.x ?? 620) ? 1 : -1;

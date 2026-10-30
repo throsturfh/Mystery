@@ -11,7 +11,7 @@ const LINES: Record<string, Record<DetectiveId, Record<Tone, string>>> = {
     sara: {
       sarcastic: '{dog} sat down the moment we came in. That is either a good sign or a very polite ghost.',
       warm: 'Edith. We came as soon as the bell made a fuss. {dog} is already working.',
-      dramatic: 'The dog knows. He lay down. Tell me what the house is afraid of.',
+      dramatic: 'The dog knows. She lay down. Tell me what the house is afraid of.',
     },
     barty: {
       sarcastic: 'Edith. I retired. The dead, rudely, did not. What is it this time?',
@@ -36,8 +36,8 @@ const LINES: Record<string, Record<DetectiveId, Record<Tone, string>>> = {
       dramatic: 'The shop knows my name already. That is either hospitality or a haunting.',
     },
     sara: {
-      sarcastic: 'He will not jump up. {dog} saves his drama for things the living cannot see.',
-      warm: 'June, this is {dog}. He is kinder than he looks, and he is very good at lost things.',
+      sarcastic: 'She will not jump up. {dog} saves her drama for things the living cannot see.',
+      warm: 'June, this is {dog}. She is kinder than she looks, and she is very good at lost things.',
       dramatic: 'If a ghost is keeping shop, the dog will tell us before the till does.',
     },
     barty: {
@@ -63,8 +63,8 @@ const LINES: Record<string, Record<DetectiveId, Record<Tone, string>>> = {
       dramatic: 'A ghost with a ledger. At last, a haunting with paperwork.',
     },
     sara: {
-      sarcastic: '{dog} sat. He only does that for people. You still count.',
-      warm: 'He is not afraid of you. That is {dog}\'s version of a handshake.',
+      sarcastic: '{dog} sat. She only does that for people. You still count.',
+      warm: 'She is not afraid of you. That is {dog}\'s version of a handshake.',
       dramatic: 'The dog found you before I did. Dogs are rude like that, and usually right.',
     },
     barty: {
@@ -91,7 +91,7 @@ const LINES: Record<string, Record<DetectiveId, Record<Tone, string>>> = {
     },
     sara: {
       sarcastic: 'By day I teach dogs to sit. By night the ghosts are worse pupils, and they do not get treats.',
-      warm: '{dog} failed as a sheepdog. He is excellent at people who are not entirely here. I kept him.',
+      warm: '{dog} failed as a sheepdog. She is excellent at people who are not entirely here. I kept her.',
       dramatic: 'I talk to dogs more honestly than I talk to the living. The dog has never once filed a complaint.',
     },
     barty: {
@@ -114,7 +114,7 @@ const LINES: Record<string, Record<DetectiveId, Record<Tone, string>>> = {
     crowe: { sarcastic: '', warm: '', dramatic: '' },
     sara: {
       sarcastic: '{dog} sneezes at the skirting. Professional opinion: something is here, and it is dusty.',
-      warm: 'He leans on your knee. When he does that, he is asking to be useful.',
+      warm: 'She leans on your knee. When she does that, she is asking to be useful.',
       dramatic: 'The dog has opinions. They are mostly "fetch" and "that corner is lying".',
     },
     barty: { sarcastic: '', warm: '', dramatic: '' },
@@ -124,6 +124,6 @@ const LINES: Record<string, Record<DetectiveId, Record<Tone, string>>> = {
 };
 
 export function aside(id: DetectiveId, moment: 'edith' | 'june' | 'ambrose' | 'dog' | 'secret', tone: Tone): string {
-  const dog = detectiveById('sara').dog ?? 'Skuggi';
+  const dog = detectiveById('sara').dog ?? 'Lotta';
   return (LINES[moment]?.[id]?.[tone] ?? '').replaceAll('{dog}', dog);
 }
