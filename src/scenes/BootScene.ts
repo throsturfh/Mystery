@@ -16,7 +16,7 @@ import {
 } from '../lotta';
 import { SARA_REACH_FPS, SARA_REACH_FRAMES, SARA_REACH_KEY, saraReachFingersKey, saraReachFrameKey } from '../saraReach';
 import { SARA_WALK_FPS, SARA_WALK_FRAMES, SARA_WALK_KEY, saraFrameKey } from '../saraWalk';
-import { stripRestingLantern } from '../restingArm';
+import { canvas2d, stripRestingLantern } from '../restingArm';
 import { paintSaraFrames } from '../tint';
 import { AdventureScene } from './AdventureScene';
 import { MapScene } from './MapScene';
@@ -165,7 +165,7 @@ export class BootScene extends Phaser.Scene {
     const canvas = document.createElement('canvas');
     canvas.width = source.width;
     canvas.height = source.height;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas2d(canvas);
     if (!ctx) return;
     ctx.drawImage(source, 0, 0);
     stripRestingLantern(canvas, 'crowe');
