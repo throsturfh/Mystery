@@ -16,6 +16,7 @@ import {
 } from '../lotta';
 import { SARA_REACH_FPS, SARA_REACH_FRAMES, SARA_REACH_KEY, saraReachFingersKey, saraReachFrameKey } from '../saraReach';
 import { SARA_WALK_FPS, SARA_WALK_FRAMES, SARA_WALK_KEY, saraFrameKey } from '../saraWalk';
+import { stripRestingLantern } from '../restingArm';
 import { paintSaraFrames } from '../tint';
 import { AdventureScene } from './AdventureScene';
 import { MapScene } from './MapScene';
@@ -121,6 +122,7 @@ export class BootScene extends Phaser.Scene {
       repeat: -1,
       skipMissedFrames: false,
     });
+    for (let i = 0; i < EDMUND_REACH_FRAMES; i++) this.hideRestingLantern(reachFrameKey(i));
     this.anims.create({
       key: EDMUND_REACH_KEY,
       frames: Array.from({ length: EDMUND_REACH_FRAMES }, (_, index) => ({ key: reachFrameKey(index) })),
@@ -152,6 +154,23 @@ export class BootScene extends Phaser.Scene {
     });
     audio.bind(this);
     this.scene.start('title');
+  }
+
+  /** Edmund's reach is one baked painting per frame. Drop the lantern arm before it is played. */
+  private hideRestingLantern(key: string): void {
+    const texture = this.textures.get(key);
+    if (!texture || texture.key === '__MISSING') return;
+    const source = texture.getSourceImage() as HTMLImageElement;
+    if (!source?.width || !source.height) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = source.width;
+    canvas.height = source.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(source, 0, 0);
+    stripRestingLantern(canvas, 'crowe');
+    this.textures.remove(key);
+    this.textures.addCanvas(key, canvas);
   }
 
   /** Sara's walk and reach colour layers. Stacked later, in the same order as the standing portrait. */
