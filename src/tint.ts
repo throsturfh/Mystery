@@ -1,7 +1,7 @@
 import type Phaser from 'phaser';
 import { strideCount } from './figure';
 import type { Profile } from './profile';
-import { canvas2d, stripRestingLantern } from './restingArm';
+import { canvas2d } from './restingArm';
 
 const FRAMES = ['detective', 'walk-0', 'walk-1', 'walk-2', 'walk-3', 'walk-4', 'walk-5'] as const;
 
@@ -64,16 +64,10 @@ export function paintSaraFrames(scene: Phaser.Scene, profile: Profile): void {
     const name = i.toString().padStart(2, '0');
     compose(scene, `sara-walk-${name}`, `walk-${name}`, profile);
   }
+  // Reach paintings are one arm already. A lantern erase cuts the reaching sleeve.
   for (let i = 0; i < 16; i++) {
     const name = i.toString().padStart(2, '0');
-    const key = `sara-reach-${name}`;
-    compose(scene, key, `reach-${name}`, profile);
-    const texture = scene.textures.get(key);
-    const source = texture?.getSourceImage();
-    if (source instanceof HTMLCanvasElement) {
-      stripRestingLantern(source, 'sara', i);
-      (texture as Phaser.Textures.CanvasTexture).refresh();
-    }
+    compose(scene, `sara-reach-${name}`, `reach-${name}`, profile);
   }
 }
 
